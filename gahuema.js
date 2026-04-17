@@ -1,477 +1,452 @@
-    const originalCanvas = document.getElementById('originalCanvas');
-    const modifiedCanvas = document.getElementById('modifiedCanvas');
-    const imageInput = document.getElementById('imageInput');
-    const dropZone = document.getElementById('dropZone');
-    const anchorHueInput = document.getElementById('anchorHue');
-    const factorInput = document.getElementById('factor');
-    const transformTypeSelect = document.getElementById('transformType');
-    const processBtn = document.getElementById('processBtn');
-    const saveBtn = document.getElementById('saveBtn');
-	const originalPixelInfo = document.getElementById('originalPixelInfo');
-const modifiedPixelInfo = document.getElementById('modifiedPixelInfo');
+// ─── State ────────────────────────────────────────────────────────────────────
 
-function getPixelInfo(canvas, x, y) {
-  const ctx = canvas.getContext('2d');
-  const pixel = ctx.getImageData(x, y, 1, 1).data;
-  const [h, s, l] = rgbToHsl(pixel[0], pixel[1], pixel[2]);
+let originalImageData = null;
+let debounceTimer = null;
+
+// ─── Element refs ─────────────────────────────────────────────────────────────
+
+const imageInput        = document.getElementById('imageInput');
+const anchorHueInput    = document.getElementById('anchorHue');
+const hueSlider         = document.getElementById('hueSlider');
+const anchorPreview     = document.getElementById('anchorPreview');
+const factorInput       = document.getElementById('factor');
+const transformSelect   = document.getElementById('transformType');
+const saveBtn           = document.getElementById('saveBtn');
+const originalPixelInfo = document.getElementById('originalPixelInfo');
+const modifiedPixelInfo = document.getElementById('modifiedPixelInfo');
+const dropPrompt        = document.getElementById('dropPrompt');
+const workspace         = document.getElementById('workspace');
+const dropZone       = document.getElementById('dropZone');
+const originalCanvas = document.getElementById('originalCanvas');
+const modifiedCanvas = document.getElementById('modifiedCanvas');
+
+// ─── Color math ───────────────────────────────────────────────────────────────
+
+
+function rgbToHsl(r, g, b) {
+  r /= 255; g /= 255; b /= 255;
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  let h, s;
+  const l = (max + min) / 2;
+
+  if (max === min) {
+    h = s = 0;
+  } else {
+    const d = max - min;
+    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+    switch (max) {
+      case r: h = (g - b) / d + (g < b ? 6 : 0); break;
+      case g: h = (b - r) / d + 2; break;
+      case b: h = (r - g) / d + 4; break;
+    }
+    h /= 6;
+  }
+  return [h * 360, s * 100, l * 100];
+}
+
+function hslToRgb(h, s, l) {
+  h /= 360; s /= 100; l /= 100;
+  let r, g, b;
+
+  if (s === 0) {
+    r = g = b = l;
+  } else {
+    const hue2rgb = (p, q, t) => {
+      if (t < 0) t += 1;
+      if (t > 1) t -= 1;
+      if (t < 1/6) return p + (q - p) * 6 * t;
+      if (t < 1/2) return q;
+      if (t < 2/3) return p + (q - p) * (2/3 - t) * 6;
+      return p;
+    };
+    const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+    const p = 2 * l - q;
+    r = hue2rgb(p, q, h + 1/3);
+    g = hue2rgb(p, q, h);
+    b = hue2rgb(p, q, h - 1/3);
+  }
+  return [Math.round(r * 255), Math.round(g * 255), Math.round(b * 255)];
+}
+
+/** Wraps an angle into [0, 360). */
+function normalizeAngle(angle) {
+  angle = angle % 360;
+  return angle < 0 ? angle + 360 : angle;
+}
+
+/**
+ * Shortest signed hue difference from anchor to pixel,
+ * in the range (-180, 180].
+ * Positive = clockwise from anchor to pixel.
+ */
+function shortestHueDiff(pixelHue, anchorHue) {
+  const raw = normalizeAngle(pixelHue - anchorHue);
+  return raw > 180 ? raw - 360 : raw;
+}
+
+// ─── Term primitives ──────────────────────────────────────────────────────────
+
+/**
+ * Direction-aware constant step — the core of 'add' mode.
+ * Always moves toward the anchor by a fixed amount.
+ */
+function addTerm(hueDiff, factor) {
+  return hueDiff >= 0 ? factor : -factor;
+}
+
+/**
+ * Proportional displacement — the core of 'multiply' mode.
+ * Net movement = how far hueDiff would travel under scaling by `factor`.
+ */
+function multiplyTerm(hueDiff, factor) {
+  return hueDiff * (factor - 1);
+}
+
+// ─── Crossing prevention ──────────────────────────────────────────────────────
+
+/**
+ * Clamps the proposed move so the hue never crosses the anchor point (0°
+ * relative) or the opposite pole (±180° relative).
+ */
+function applyPreventCrossing(pixelHue, anchorHue, hueDiff, totalMove) {
+  const proposedRel = hueDiff + totalMove;
+
+  // Crossed the anchor itself
+  if ((hueDiff > 0 && proposedRel <= 0) || (hueDiff < 0 && proposedRel >= 0)) {
+    return anchorHue;
+  }
+
+  // Crossed the opposite pole
+  if (proposedRel > 180 || proposedRel < -180) {
+    return normalizeAngle(anchorHue + 180);
+  }
+
+  return normalizeAngle(pixelHue + totalMove);
+}
+
+// ─── Transform modes ──────────────────────────────────────────────────────────
+
+
+// ─── Refactored Transform Engine ──────────────────────────────────────────────
+
+const transforms = {
+  // Common engine to handle Add, Multiply, and Binomial
+  execute(pixelHue, anchorHue, params) {
+    const { mode, factor, m, p, a, preventCrossing } = params;
+
+    // 1. Calculate Shortest Hue Distance [-180, 180]
+    let hueDiff = pixelHue - anchorHue;
+    if (hueDiff > 180) hueDiff -= 360;
+    if (hueDiff < -180) hueDiff += 360;
+
+    if (hueDiff === 0) return anchorHue;
+
+    const sign = Math.sign(hueDiff);
+    let transformedHueDiff;
+
+    // 2. Process based on mode
+    if (mode === 'add') {
+      // Direct shift: hueDiff + (sign * factor)
+      transformedHueDiff = hueDiff + (sign * factor);
+    } 
+    else if (mode === 'multiply') {
+      // Scaling: hueDiff * factor
+      transformedHueDiff = hueDiff * factor;
+    } 
+    else if (mode === 'binomial') {
+      // Power: Math.sign(hueDiff) * |hueDiff|^p
+      let pHueDiff = sign * Math.pow(Math.abs(hueDiff), p);
+      // Multiplication: m * pHueDiff
+      let mHueDiff = m * pHueDiff;
+      // Addition: mHueDiff + (sign * a)
+      transformedHueDiff = mHueDiff + (sign * a);
+    }
+
+    // 3. Prevent Crossing Logic
+    if (preventCrossing) {
+      // Crossed the anchor point (sign flip)
+      if (Math.sign(transformedHueDiff) !== sign) {
+        transformedHueDiff = 0;
+      }
+      // Crossed the opposite pole (overflow 180)
+      else if (Math.abs(transformedHueDiff) > 180) {
+        transformedHueDiff = 180 * sign;
+      }
+    }
+
+    // 4. Final Hue Calculation
+    return normalizeAngle(anchorHue + transformedHueDiff);
+  }
+};
+
+// ─── Updated processImage loop ───────────────────────────────────────────────
+
+function processImage() {
+  if (!originalImageData) return;
+
+  const params = getParams();
+  // We now use the unified execute function
+  const transform = transforms.execute;
+
+  modifiedCanvas.width  = originalImageData.width;
+  modifiedCanvas.height = originalImageData.height;
+  const ctx = modifiedCanvas.getContext('2d');
+
+  const imageData = new ImageData(
+    new Uint8ClampedArray(originalImageData.data),
+    originalImageData.width,
+    originalImageData.height
+  );
+  const data = imageData.data;
+
+  for (let i = 0; i < data.length; i += 4) {
+    const [h, s, l] = rgbToHsl(data[i], data[i + 1], data[i + 2]);
+    
+    // Call the refactored engine
+    const newHue = transform(h, params.anchorHue, params);
+    
+    const [r, g, b] = hslToRgb(newHue, s, l);
+    data[i] = r; data[i + 1] = g; data[i + 2] = b;
+  }
+
+  ctx.putImageData(imageData, 0, 0);
+}
+
+// ─── Read current params from UI ─────────────────────────────────────────────
+
+function getParams() {
   return {
-    hue: Math.round(h),
-    saturation: Math.round(s),
-    lightness: Math.round(l),
-    pixel: pixel,
-    x: x,
-    y: y
+    mode:            transformSelect.value,
+    anchorHue:       parseFloat(anchorHueInput.value),
+    factor:          parseFloat(factorInput.value),
+    m:               parseFloat(document.getElementById('advM').value) || 0,
+    p:               parseFloat(document.getElementById('advP').value) || 1,
+    a:               parseFloat(document.getElementById('advA').value) || 0,
+    preventCrossing: document.getElementById('preventCrossing').checked,
   };
 }
 
-const polynomialControls = `
-  <div class="input-group polynomial-controls" style="display: none;">
-    <div class="formula-display">
-      newHue = initialHue + (divider/hueDiff + distanceToMove + multiplier*hueDiff)
-    </div>
-    <div class="input-group">
-      <label for="dividerFactor">Divider Factor:</label>
-      <input type="number" id="dividerFactor" step="0.1" value="0">
-    </div>
-    <div class="input-group">
-      <label for="distanceToMove">Distance to Move:</label>
-      <input type="number" id="distanceToMove" step="0.1" value="0">
-    </div>
-    <div class="input-group">
-      <label for="multiplierFactor">Multiplier Factor:</label>
-      <input type="number" id="multiplierFactor" step="0.1" value="0.5">
-    </div>
-    <div class="input-group">
-      <label for="preventCrossing">
-        <input type="checkbox" id="preventCrossing" checked>
-        Prevent Crossing Anchor Point
-      </label>
-    </div>
-  </div>
-`;
 
-const powerControls = `
-  <div class="input-group power-controls" style="display: none;">
-    <div class="formula-display">
-      newHue = initialHue + distanceToMove * hueDiff^power
-    </div>
-    <div class="input-group">
-      <label for="powerDistance">Distance to Move:</label>
-      <input type="number" id="powerDistance" step="0.1" value="1.0">
-    </div>
-    <div class="input-group">
-      <label for="powerExponent">Power:</label>
-      <input type="number" id="powerExponent" step="0.1" value="2.0">
-    </div>
-    <div class="input-group">
-      <label for="preventPowerCrossing">
-        <input type="checkbox" id="preventPowerCrossing" checked>
-        Prevent Crossing Anchor Point
-      </label>
-    </div>
-  </div>
-`;
 
-// Update the transform type change handler
-document.getElementById('transformType').addEventListener('change', (e) => {
-  const polynomialControls = document.querySelector('.polynomial-controls');
-  const powerControls = document.querySelector('.power-controls');
-  const basicControls = document.querySelector('.basic-controls');
-  
-  // Hide all controls first
-  polynomialControls.style.display = 'none';
-  powerControls.style.display = 'none';
-  basicControls.style.display = 'none';
-  
-  // Show the appropriate controls
-  switch(e.target.value) {
-    case 'polynomial':
-      polynomialControls.style.display = 'block';
-      break;
-    case 'power':
-      powerControls.style.display = 'block';
-      break;
-    default:
-      basicControls.style.display = 'block';
-      break;
-  }
-});
+function scheduleProcess() {
+  clearTimeout(debounceTimer);
+  debounceTimer = setTimeout(processImage, 80);
+}
 
-function updateAnchorFromPixel(canvas, event) {
-  const rect = canvas.getBoundingClientRect();
-  const x = Math.floor((event.clientX - rect.left) * (canvas.width / rect.width));
-  const y = Math.floor((event.clientY - rect.top) * (canvas.height / rect.height));
+// ─── UI: control panel visibility ─────────────────────────────────────────────
+
+
+const basicControls    = document.getElementById('basicControls');
+const binomialControls = document.getElementById('binomialControls');
+const factorLabel  = document.getElementById('factorLabel');
+const factorLabels = {
+  add:      'Shift Amount (°):',
+  multiply: 'Scale Factor:',
+};
+
+function updateControlVisibility() {
+  const mode = transformSelect.value;
   
-  if (x >= 0 && x < canvas.width && y >= 0 && y < canvas.height) {
-    const pixelInfo = getPixelInfo(canvas, x, y);
-    
-    // Update anchor hue input and slider
-    const hue = pixelInfo.hue;
-    anchorHueInput.value = hue;
-    hueSlider.value = hue;
-    
-    // Update color preview
-    updateAnchorPreview(hue);
+  if (mode === 'binomial') {
+    basicControls.style.display = 'none';
+    binomialControls.style.display = 'block';
+  } else {
+    // CHANGE: Use 'flex' here so it respects the .input-group CSS rules
+    basicControls.style.display = 'flex'; 
+    binomialControls.style.display = 'none';
+    if (factorLabel && factorLabels[mode]) {
+      factorLabel.textContent = factorLabels[mode];
+    }
   }
 }
 
-// Initialize visibility based on default selection
-const initialTransformType = document.getElementById('transformType').value;
-document.querySelector('.polynomial-controls').style.display = 
-  initialTransformType === 'polynomial' ? 'block' : 'none';
-document.querySelector('.basic-controls').style.display = 
-  initialTransformType === 'polynomial' ? 'none' : 'block';
+// ... rest of the code ...
 
-// Update click event listeners for both canvases
-originalCanvas.addEventListener('click', (e) => {
-  updateAnchorFromPixel(originalCanvas, e);
-  updatePixelInfo(e, originalCanvas, originalPixelInfo, modifiedCanvas, modifiedPixelInfo);
+// IMPORTANT: Check the very end of your file. 
+// You have an extra "}" after the uploadBtn listener that needs to be removed.
+transformSelect.addEventListener('change', () => {
+  updateControlVisibility();
+  if (originalImageData) scheduleProcess();
 });
 
-modifiedCanvas.addEventListener('click', (e) => {
-  updateAnchorFromPixel(modifiedCanvas, e);
-  updatePixelInfo(e, modifiedCanvas, modifiedPixelInfo, originalCanvas, originalPixelInfo);
+updateControlVisibility();
+
+// ─── UI: anchor hue controls ──────────────────────────────────────────────────
+
+function updateAnchorPreview(hue) {
+  anchorPreview.style.backgroundColor = `hsl(${hue}, 100%, 50%)`;
+}
+
+anchorHueInput.addEventListener('input', (e) => {
+  const value = Math.min(360, Math.max(0, parseFloat(e.target.value) || 0));
+  hueSlider.value = value;
+  updateAnchorPreview(value);
+  if (originalImageData) scheduleProcess();
 });
 
-function updatePixelInfo(e, sourceCanvas, sourceInfo, targetCanvas, targetInfo) {
+hueSlider.addEventListener('input', (e) => {
+  const value = parseFloat(e.target.value);
+  anchorHueInput.value = value;
+  updateAnchorPreview(value);
+  if (originalImageData) scheduleProcess();
+});
+
+updateAnchorPreview(parseFloat(anchorHueInput.value));
+
+// Live reprocess on any parameter control change
+document.querySelector('.controls').addEventListener('input', (e) => {
+  // Exclude inputs already handled above and the transform select
+  if (e.target === anchorHueInput || e.target === hueSlider || e.target === transformSelect) return;
+  if (originalImageData) scheduleProcess();
+});
+
+// ─── UI: pixel info display ───────────────────────────────────────────────────
+
+function getPixelInfo(canvas, x, y) {
+  const ctx   = canvas.getContext('2d');
+  const pixel = ctx.getImageData(x, y, 1, 1).data;
+  const [h, s, l] = rgbToHsl(pixel[0], pixel[1], pixel[2]);
+  return { hue: Math.round(h), saturation: Math.round(s), lightness: Math.round(l), pixel, x, y };
+}
+
+function renderPixelInfo(infoEl, pixel, x, y, h, s, l, hueDiff = null) {
+  const rgb = `rgb(${pixel[0]}, ${pixel[1]}, ${pixel[2]})`;
+  infoEl.innerHTML = `
+    <div class="color-swatch" style="background-color:${rgb}"></div>
+    <div class="info-text">
+      Position: (${x}, ${y})<br>
+      H: ${Math.round(h)}&deg; &nbsp;S: ${Math.round(s)}% &nbsp;L: ${Math.round(l)}%
+      ${hueDiff !== null ? `<br>Hue shift: ${Math.round(hueDiff)}&deg;` : ''}
+    </div>`;
+}
+
+function updatePixelInfo(e, sourceCanvas, sourceInfoEl, otherCanvas, otherInfoEl) {
   const rect = sourceCanvas.getBoundingClientRect();
-  const x = Math.floor((e.clientX - rect.left) * (sourceCanvas.width / rect.width));
-  const y = Math.floor((e.clientY - rect.top) * (sourceCanvas.height / rect.height));
-  
-  if (x >= 0 && x < sourceCanvas.width && y >= 0 && y < sourceCanvas.height) {
-    const sourceCtx = sourceCanvas.getContext('2d');
-    const targetCtx = targetCanvas.getContext('2d');
-    
-    const sourcePixel = sourceCtx.getImageData(x, y, 1, 1).data;
-    const targetPixel = targetCtx.getImageData(x, y, 1, 1).data;
-    
-    const [sourceH, sourceS, sourceL] = rgbToHsl(sourcePixel[0], sourcePixel[1], sourcePixel[2]);
-    const [targetH, targetS, targetL] = rgbToHsl(targetPixel[0], targetPixel[1], targetPixel[2]);
-    
-    const hueDiff = normalizeAngle(targetH - sourceH);
-    const normalizedDiff = hueDiff > 180 ? hueDiff - 360 : hueDiff;
-    
-sourceInfo.innerHTML = `
-  <div class="color-swatch" style="background-color: rgb(${sourcePixel[0]}, ${sourcePixel[1]}, ${sourcePixel[2]})"></div>
-  <div class="info-text">
-    Position: (${x}, ${y})<br>
-    H: ${Math.round(sourceH)}&#176; S: ${Math.round(sourceS)}% L: ${Math.round(sourceL)}%
-  </div>
-`;
+  const x = Math.floor((e.clientX - rect.left) * (sourceCanvas.width  / rect.width));
+  const y = Math.floor((e.clientY - rect.top)  * (sourceCanvas.height / rect.height));
 
-targetInfo.innerHTML = `
-  <div class="color-swatch" style="background-color: rgb(${targetPixel[0]}, ${targetPixel[1]}, ${targetPixel[2]})"></div>
-  <div class="info-text">
-    Position: (${x}, ${y})<br>
-    H: ${Math.round(targetH)}&#176; S: ${Math.round(targetS)}% L: ${Math.round(targetL)}%<br>
-    Hue Difference: ${Math.round(normalizedDiff)}&#176;
-  </div>
-`;
+  if (x < 0 || x >= sourceCanvas.width || y < 0 || y >= sourceCanvas.height) return;
+
+  const srcInfo = getPixelInfo(sourceCanvas, x, y);
+  renderPixelInfo(sourceInfoEl, srcInfo.pixel, x, y, srcInfo.hue, srcInfo.saturation, srcInfo.lightness);
+
+  if (otherCanvas.width && otherCanvas.height) {
+    const otherInfo  = getPixelInfo(otherCanvas, x, y);
+    const diff       = normalizeAngle(otherInfo.hue - srcInfo.hue);
+    const signedDiff = diff > 180 ? diff - 360 : diff;
+    renderPixelInfo(otherInfoEl, otherInfo.pixel, x, y, otherInfo.hue, otherInfo.saturation, otherInfo.lightness, signedDiff);
   }
 }
 
+// ─── UI: click to set anchor from canvas ─────────────────────────────────────
 
-// Insert the power controls after the transform type select
-document.querySelector('.controls').insertAdjacentHTML('beforeend', powerControls);
+function setAnchorFromCanvas(canvas, e) {
+  const rect = canvas.getBoundingClientRect();
+  const x = Math.floor((e.clientX - rect.left) * (canvas.width  / rect.width));
+  const y = Math.floor((e.clientY - rect.top)  * (canvas.height / rect.height));
+  if (x < 0 || x >= canvas.width || y < 0 || y >= canvas.height) return;
 
-// Add these event listeners after canvas setup
-originalCanvas.addEventListener('mousemove', (e) => {
-  updatePixelInfo(e, originalCanvas, originalPixelInfo, modifiedCanvas, modifiedPixelInfo);
-});
+  const { hue } = getPixelInfo(canvas, x, y);
+  anchorHueInput.value = hue;
+  hueSlider.value      = hue;
+  updateAnchorPreview(hue);
+  if (originalImageData) scheduleProcess();
+}
 
-modifiedCanvas.addEventListener('mousemove', (e) => {
-  updatePixelInfo(e, modifiedCanvas, modifiedPixelInfo, originalCanvas, originalPixelInfo);
-});
+// Single set of listeners per canvas — no duplicates
+originalCanvas.addEventListener('mousemove', (e) =>
+  updatePixelInfo(e, originalCanvas, originalPixelInfo, modifiedCanvas, modifiedPixelInfo));
+modifiedCanvas.addEventListener('mousemove', (e) =>
+  updatePixelInfo(e, modifiedCanvas, modifiedPixelInfo, originalCanvas, originalPixelInfo));
 
-// Optional: Add click handlers if you want to "freeze" the info
 originalCanvas.addEventListener('click', (e) => {
+  setAnchorFromCanvas(originalCanvas, e);
   updatePixelInfo(e, originalCanvas, originalPixelInfo, modifiedCanvas, modifiedPixelInfo);
 });
-
 modifiedCanvas.addEventListener('click', (e) => {
+  setAnchorFromCanvas(modifiedCanvas, e);
   updatePixelInfo(e, modifiedCanvas, modifiedPixelInfo, originalCanvas, originalPixelInfo);
 });
-    
-    let originalImageData = null;
-    
-    // Save functionality
-    saveBtn.addEventListener('click', () => {
-      if (!modifiedCanvas.width) return;
-      
-      // Create a temporary link
-      const link = document.createElement('a');
-      link.download = 'gahuma-processed.png';
-      link.href = modifiedCanvas.toDataURL('image/png');
-      
-      // Trigger download
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-    });
-    
-    // Drag and drop handlers
-    dropZone.addEventListener('click', () => imageInput.click());
-    
-    dropZone.addEventListener('dragover', (e) => {
-      e.preventDefault();
-      dropZone.classList.add('drag-over');
-    });
-    
-    dropZone.addEventListener('dragleave', () => {
-      dropZone.classList.remove('drag-over');
-    });
-    
-    dropZone.addEventListener('drop', (e) => {
-      e.preventDefault();
-      dropZone.classList.remove('drag-over');
-      const file = e.dataTransfer.files[0];
-      if (file && file.type.startsWith('image/')) {
-        handleImageFile(file);
-      }
-    });
-    
-    // Convert RGB to HSL
-    function rgbToHsl(r, g, b) {
-      r /= 255;
-      g /= 255;
-      b /= 255;
-      
-      const max = Math.max(r, g, b);
-      const min = Math.min(r, g, b);
-      let h, s, l = (max + min) / 2;
-      
-      if (max === min) {
-        h = s = 0;
-      } else {
-        const d = max - min;
-        s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
-        
-        switch (max) {
-          case r:
-            h = (g - b) / d + (g < b ? 6 : 0);
-            break;
-          case g:
-            h = (b - r) / d + 2;
-            break;
-          case b:
-            h = (r - g) / d + 4;
-            break;
-        }
-        h /= 6;
-      }
-      
-      return [h * 360, s * 100, l * 100];
-    }
-    
-    // Convert HSL to RGB
-    function hslToRgb(h, s, l) {
-      h /= 360;
-      s /= 100;
-      l /= 100;
-      
-      let r, g, b;
-      
-      if (s === 0) {
-        r = g = b = l;
-      } else {
-        const hue2rgb = (p, q, t) => {
-          if (t < 0) t += 1;
-          if (t > 1) t -= 1;
-          if (t < 1/6) return p + (q - p) * 6 * t;
-          if (t < 1/2) return q;
-          if (t < 2/3) return p + (q - p) * (2/3 - t) * 6;
-          return p;
-        };
-        
-        const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
-        const p = 2 * l - q;
-        
-        r = hue2rgb(p, q, h + 1/3);
-        g = hue2rgb(p, q, h);
-        b = hue2rgb(p, q, h - 1/3);
-      }
-      
-      return [
-        Math.round(r * 255),
-        Math.round(g * 255),
-        Math.round(b * 255)
-      ];
-    }
-    
-    // Normalize angle to 0-360 range
-    function normalizeAngle(angle) {
-      angle = angle % 360;
-      return angle < 0 ? angle + 360 : angle;
-    }
-    
- // Update the processImage function to include polynomial mode
-function processImage() {
-	
-	
-  if (!originalImageData) return;
-  
-  const anchorHue = parseFloat(anchorHueInput.value);
-  const transformType = transformTypeSelect.value;
-  
-  // Draw original image data to modified canvas
-  modifiedCanvas.width = originalImageData.width;
-  modifiedCanvas.height = originalImageData.height;
-  const ctx = modifiedCanvas.getContext('2d');
-  ctx.putImageData(originalImageData, 0, 0);
-  
-  const imageData = ctx.getImageData(0, 0, modifiedCanvas.width, modifiedCanvas.height);
-  const data = imageData.data;
-  
-  // Get polynomial mode parameters if needed
-  const dividerFactor = transformType === 'polynomial' ? parseFloat(document.getElementById('dividerFactor').value) : 0;
-  const distanceToMove = transformType === 'polynomial' ? parseFloat(document.getElementById('distanceToMove').value) : 0;
-  const multiplierFactor = transformType === 'polynomial' ? parseFloat(document.getElementById('multiplierFactor').value) : 0.5;
-  const preventCrossing = transformType === 'polynomial' ? document.getElementById('preventCrossing').checked : false;
-  
-  for (let i = 0; i < data.length; i += 4) {
-    const r = data[i];
-    const g = data[i + 1];
-    const b = data[i + 2];
-    
-    const [h, s, l] = rgbToHsl(r, g, b);
-    
-    let newHue;
-	if (transformType === 'power') {
-      // Get power mode parameters
-      const distanceToMove = parseFloat(document.getElementById('powerDistance').value);
-      const power = parseFloat(document.getElementById('powerExponent').value);
-      const preventCrossing = document.getElementById('preventPowerCrossing').checked;
-      
-      // Calculate the shortest path difference
-      const hueDiff1 = normalizeAngle(h - anchorHue); // Going clockwise
-      const hueDiff2 = hueDiff1 > 180 ? hueDiff1 - 360 : hueDiff1; // Convert to -180 to 180 range
-      
-      // Use the smaller difference
-      const hueDiff = Math.abs(hueDiff2) < Math.abs(hueDiff1) ? hueDiff2 : hueDiff1;
-      
-      // Calculate power transformation
-      // Preserve the sign of hueDiff when applying power
-      const sign = Math.sign(hueDiff);
-      const powerTerm = sign * Math.pow(Math.abs(hueDiff), power);
-      const totalMove = distanceToMove * powerTerm;
-      
-      // Check if movement would cross anchor point
-      const wouldCross = preventCrossing && (
-        (hueDiff > 0 && totalMove < 0) || // Moving counterclockwise past anchor
-        (hueDiff < 0 && totalMove > 0) || // Moving clockwise past anchor
-        Math.abs(totalMove) > Math.abs(hueDiff) // Moving beyond anchor
-      );
-      
-      if (wouldCross) {
-        newHue = anchorHue;
-      } else {
-        newHue = normalizeAngle(h + totalMove);
-      }
-    } else if (transformType === 'polynomial') {
-      // Calculate the shortest path difference
-      const hueDiff1 = normalizeAngle(h - anchorHue); // Going clockwise
-      const hueDiff2 = hueDiff1 > 180 ? hueDiff1 - 360 : hueDiff1; // Convert to -180 to 180 range
-      
-      // Use the smaller difference
-      const hueDiff = Math.abs(hueDiff2) < Math.abs(hueDiff1) ? hueDiff2 : hueDiff1;
-      
-      // Calculate polynomial sum
-      // If hueDiff is 0, skip the division to avoid divide by zero
-      const dividerTerm = hueDiff !== 0 ? dividerFactor / hueDiff : 0;
-      const polynomialSum = dividerTerm + distanceToMove + (multiplierFactor * hueDiff);
-      
-      // Determine if the sum would cause crossing
-      const wouldCross = preventCrossing && (
-        (hueDiff > 0 && polynomialSum < 0) || // Moving counterclockwise past anchor
-        (hueDiff < 0 && polynomialSum > 0) || // Moving clockwise past anchor
-        Math.abs(polynomialSum) > Math.abs(hueDiff) // Moving beyond anchor
-      );
-      
-      if (wouldCross) {
-        newHue = anchorHue; // Set to anchor point if crossing would occur
-      } else {
-        newHue = normalizeAngle(h + polynomialSum);
-      }
-    } else if (transformType === 'multiply') {
-      // Existing multiply mode code
-      const hueDiff1 = normalizeAngle(h - anchorHue);
-      const hueDiff2 = hueDiff1 > 180 ? hueDiff1 - 360 : hueDiff1;
-      const finalDiff = Math.abs(hueDiff2) < Math.abs(hueDiff1) ? hueDiff2 : hueDiff1;
-      const multipliedDiff = finalDiff * parseFloat(factor.value);
-      newHue = normalizeAngle(anchorHue + multipliedDiff);
-    } else {
-      // Existing add mode code
-      const hueDiff1 = normalizeAngle(anchorHue - h);
-      const hueDiff2 = hueDiff1 > 180 ? hueDiff1 - 360 : hueDiff1;
-      const shouldGoCounterclockwise = Math.abs(hueDiff2) < Math.abs(hueDiff1);
-      newHue = normalizeAngle(h + (shouldGoCounterclockwise ? -parseFloat(factor.value) : parseFloat(factor.value)));
-    }
-    
-    const [newR, newG, newB] = hslToRgb(newHue, s, l);
-    
-    data[i] = newR;
-    data[i + 1] = newG;
-    data[i + 2] = newB;
-  }
-  
-  ctx.putImageData(imageData, 0, 0);
+
+// ─── Image loading ───────────────────────────────────────────────────
+
+function handleImageFile(file) {
+  const reader = new FileReader();
+  reader.onload = (event) => {
+    const img = new Image();
+    img.onload = () => {
+      originalCanvas.width  = modifiedCanvas.width  = img.width;
+      originalCanvas.height = modifiedCanvas.height = img.height;
+
+      const originalCtx = originalCanvas.getContext('2d');
+      originalCtx.drawImage(img, 0, 0);
+      originalImageData = originalCtx.getImageData(0, 0, img.width, img.height);
+
+      dropPrompt.style.display = 'none';
+      workspace.style.display  = 'block';
+      dropZone.classList.add('loaded');
+
+      processImage();
+    };
+    img.src = event.target.result;
+  };
+  reader.readAsDataURL(file);
 }
-    // Handle image file loading
-    function handleImageFile(file) {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        const img = new Image();
-        img.onload = () => {
-          // Set canvas dimensions
-          originalCanvas.width = img.width;
-          originalCanvas.height = img.height;
-          modifiedCanvas.width = img.width;
-          modifiedCanvas.height = img.height;
-          
-          // Draw and store original image
-          const originalCtx = originalCanvas.getContext('2d');
-          originalCtx.drawImage(img, 0, 0);
-          originalImageData = originalCtx.getImageData(0, 0, img.width, img.height);
-          
-          // Draw initial modified image
-          const modifiedCtx = modifiedCanvas.getContext('2d');
-          modifiedCtx.drawImage(img, 0, 0);
-        };
-        img.src = event.target.result;
-      };
-      reader.readAsDataURL(file);
-    }
-    
-    // Handle file input change
-    imageInput.addEventListener('change', (e) => {
-      const file = e.target.files[0];
-      if (file) {
-        handleImageFile(file);
-      }
-    });
-    
-    // Process button click handler
-    processBtn.addEventListener('click', processImage);
-  const hueSlider = document.getElementById('hueSlider');
-    const anchorPreview = document.getElementById('anchorPreview');
-    
-    function updateAnchorPreview(hue) {
-      anchorPreview.style.backgroundColor = `hsl(${hue}, 100%, 50%)`;
-    }
-    
-    // Sync number input with slider
-    anchorHueInput.addEventListener('input', (e) => {
-      const value = Math.min(360, Math.max(0, e.target.value));
-      hueSlider.value = value;
-      updateAnchorPreview(value);
-    });
-    
-    // Sync slider with number input
-    hueSlider.addEventListener('input', (e) => {
-      anchorHueInput.value = e.target.value;
-      updateAnchorPreview(e.target.value);
-    });
-    
-    // Initialize color preview
-    updateAnchorPreview(anchorHueInput.value);
-    
+
+imageInput.addEventListener('change', (e) => {
+  if (e.target.files[0]) handleImageFile(e.target.files[0]);
+});
+
+dropPrompt.addEventListener('click', () => imageInput.click());
+
+// ─── Robust drag-and-drop handling ───
+['dragenter', 'dragover'].forEach(eventName => {
+  dropZone.addEventListener(eventName, (e) => {
+    e.preventDefault();
+    dropZone.classList.add('drag-over');
+  });
+});
+
+dropZone.addEventListener('dragleave', (e) => {
+  e.preventDefault();
+  // Only remove the visual cue if leaving the actual dropZone entirely, 
+  // preventing flicker when dragging over child elements like the canvas.
+  if (!dropZone.contains(e.relatedTarget)) {
+    dropZone.classList.remove('drag-over');
+  }
+});
+
+dropZone.addEventListener('drop', (e) => {
+  e.preventDefault();
+  dropZone.classList.remove('drag-over');
+  const file = e.dataTransfer.files[0];
+  if (file && file.type.startsWith('image/')) handleImageFile(file);
+});
+// ─── Save ─────────────────────────────────────────────────────────────────────
+
+const filenameInput = document.getElementById('filenameInput');
+
+saveBtn.addEventListener('click', () => {
+  if (!modifiedCanvas.width) return;
+  
+  // Grab the filename, fallback to default if the user cleared the input
+  let filename = filenameInput ? filenameInput.value.trim() : 'gahuema-processed';
+  if (!filename) filename = 'gahuema-processed';
+
+  const link      = document.createElement('a');
+  link.download   = `${filename}.png`;
+  link.href       = modifiedCanvas.toDataURL('image/png');
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+});
+// ─── Top Upload Button ────────────────────────────────────────────────────────
+
+const uploadBtn = document.getElementById('uploadBtn');
+
+if (uploadBtn) {
+  uploadBtn.addEventListener('click', () => {
+    imageInput.click();
+  });
+}

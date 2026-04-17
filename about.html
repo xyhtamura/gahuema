@@ -1,0 +1,553 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>About | GaHueMa</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Averia+Sans+Libre:wght@700&display=swap');
+        
+        body {
+            background-color: #303030;
+            color: #cccac6;
+            font-family: system-ui, -apple-system, sans-serif;
+            line-height: 1.6;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+        }
+
+        .container {
+            max-width: 800px;
+            padding: 40px 20px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 50px;
+        }
+
+        .title {
+            font-family: 'Averia Sans Libre', cursive;
+            font-size: 3.5em;
+            margin-bottom: 5px;
+            background: linear-gradient(45deg, #ff0066, #ff9933, #33cc33, #3399ff);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+        }
+
+        .subtitle {
+            font-family: 'Averia Sans Libre', cursive;
+            font-size: 1.2em;
+            color: #888;
+            margin-top: 0;
+        }
+
+        h2 {
+            color: #ff9933;
+            border-bottom: 1px solid #444;
+            padding-bottom: 10px;
+            margin-top: 40px;
+        }
+
+        .content-section {
+            background: #202020;
+            padding: 25px;
+            border-radius: 12px;
+            margin-bottom: 30px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+        }
+
+        code {
+            background: #404040;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: monospace;
+            color: #3399ff;
+        }
+
+        .formula {
+            display: block;
+            background: #151515;
+            padding: 15px;
+            border-left: 4px solid #33cc33;
+            margin: 10px 0;
+            font-family: monospace;
+            overflow-x: auto;
+        }
+
+        .nav-link {
+            display: inline-block;
+            margin-top: 20px;
+            color: #3399ff;
+            text-decoration: none;
+            font-weight: bold;
+            transition: color 0.2s;
+        }
+
+        .nav-link:hover {
+            color: #ff0066;
+        }
+
+        .author-card {
+            border: 1px solid #444;
+            padding: 20px;
+            border-radius: 8px;
+            margin-top: 60px;
+            font-style: italic;
+            font-size: 0.95em;
+        }
+		
+		 /* Hue Wheel Animation CSS */
+        .hue-wheel-demo {
+            background: #151515;
+            border: 1px dashed #555;
+            border-radius: 8px;
+            padding: 20px;
+            margin-top: 15px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+.hue-wheel {
+    width: 140px;
+    height: 140px;
+    border-radius: 50%;
+    /* Red starts at 90deg (3 o'clock) */
+    background: conic-gradient(from 90deg, red, yellow, lime, cyan, blue, magenta, red);
+    position: relative;
+    box-shadow: inset 0 0 0 12px #151515, 0 4px 10px rgba(0,0,0,0.5);
+}
+
+        .hue-wheel::after {
+            content: '';
+            position: absolute;
+            top: 24px; left: 24px; right: 24px; bottom: 24px;
+            background: #181818;
+            border-radius: 50%;
+            box-shadow: inset 0 2px 5px rgba(0,0,0,0.5);
+        }
+
+        .anchor-point {
+            position: absolute;
+            top: 50%; left: 50%;
+            width: 14px; height: 14px;
+            background: red;
+            border: 2px solid #fff;
+            border-radius: 50%;
+            transform: translate(-50%, -50%) rotate(0deg) translate(58px);
+            z-index: 5;
+            box-shadow: 0 0 8px rgba(255,0,0,0.8);
+        }
+
+        .pt {
+            position: absolute;
+            top: 50%; left: 50%;
+            width: 12px; height: 12px;
+            border: 2px solid #fff;
+            border-radius: 50%;
+            margin-top: -8px;
+            margin-left: -8px;
+            z-index: 4;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.5);
+        }
+
+/* Attractor Keyframes (Moving halfway toward Red/0deg) */
+@keyframes att-1 { 0%, 100% { transform: rotate(280deg) translate(58px); background: hsl(250, 85%, 60%); } 45%, 55% { transform: rotate(320.5deg) translate(58px); background: hsl(337.5, 85%, 60%); } }
+@keyframes att-2 { 0%, 100% { transform: rotate(340deg) translate(58px); background: hsl(340, 85%, 60%); } 45%, 55% { transform: rotate(350deg) translate(58px); background: hsl(350, 85%, 60%); } }
+@keyframes att-3 { 0%, 100% { transform: rotate(20deg) translate(58px); background: hsl(20, 85%, 60%); } 45%, 55% { transform: rotate(10deg) translate(58px); background: hsl(10, 85%, 60%); } }
+@keyframes att-4 { 0%, 100% { transform: rotate(45deg) translate(58px); background: hsl(45, 85%, 60%); } 45%, 55% { transform: rotate(22.5deg) translate(58px); background: hsl(22.5, 85%, 60%); } }
+@keyframes att-5 { 0%, 100% { transform: rotate(70deg) translate(58px); background: hsl(70, 85%, 60%); } 45%, 55% { transform: rotate(35deg) translate(58px); background: hsl(35, 85%, 60%); } }
+
+/* Repulsor Keyframes (Moving outward from Red/0deg) */
+@keyframes rep-1 { 0%, 100% { transform: rotate(280deg) translate(58px); background: hsl(280, 85%, 60%);} 45%, 55% { transform: rotate(240deg) translate(58px); background: hsl(240, 85%, 60%); } }
+@keyframes rep-2 { 0%, 100% { transform: rotate(340deg) translate(58px); background: hsl(340, 85%, 60%); } 45%, 55% { transform: rotate(310deg) translate(58px); background: hsl(310, 85%, 60%); } }
+@keyframes rep-3 { 0%, 100% { transform: rotate(20deg) translate(58px); background: hsl(20, 85%, 60%); } 45%, 55% { transform: rotate(50deg) translate(58px); background: hsl(50, 85%, 60%); } }
+@keyframes rep-4 { 0%, 100% { transform: rotate(45deg) translate(58px); background: hsl(45, 85%, 60%); } 45%, 55% { transform: rotate(80deg) translate(58px); background: hsl(80, 85%, 60%); } }
+@keyframes rep-5 { 0%, 100% { transform: rotate(70deg) translate(58px); background: hsl(70, 85%, 60%); } 45%, 55% { transform: rotate(105deg) translate(58px); background: hsl(105, 85%, 60%); } }
+
+        .attract-container .pt-1 { animation: att-1 3.5s ease-in-out infinite; }
+        .attract-container .pt-2 { animation: att-2 3.5s ease-in-out infinite; }
+        .attract-container .pt-3 { animation: att-3 3.5s ease-in-out infinite; }
+        .attract-container .pt-4 { animation: att-4 3.5s ease-in-out infinite; }
+        .attract-container .pt-5 { animation: att-5 3.5s ease-in-out infinite; }
+
+        .repel-container .pt-1 { animation: rep-1 3.5s ease-in-out infinite; }
+        .repel-container .pt-2 { animation: rep-2 3.5s ease-in-out infinite; }
+        .repel-container .pt-3 { animation: rep-3 3.5s ease-in-out infinite; }
+        .repel-container .pt-4 { animation: rep-4 3.5s ease-in-out infinite; }
+        .repel-container .pt-5 { animation: rep-5 3.5s ease-in-out infinite; }
+        
+/* Constrain Original Image */
+.concept-example img {
+    max-width: 100%;
+    height: auto;
+    border-radius: 8px;
+    border: 1px solid #444;
+}
+
+/* Specific constraint for the 'Original' preview */
+.original-preview {
+    max-width: 400px !important; /* Smaller size as requested */
+    margin: 0 auto 20px auto;
+    display: block;
+}
+
+/* Improved Grid Visualization */
+.two-col-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 25px;
+    margin-top: 20px;
+}
+
+.two-col-grid figure {
+    margin: 0;
+    background: #1a1a1a;
+    padding: 15px;
+    border-radius: 8px;
+    border: 1px solid #333;
+    transition: transform 0.2s ease;
+}
+
+.two-col-grid figure:hover {
+    border-color: #ff9933; /* A nod to your neon preference */
+}
+
+figcaption {
+    font-size: 0.85em;
+    color: #888;
+    margin-top: 10px;
+    text-align: center;
+    min-height: 3em;
+}
+
+/* Formula Styling Update */
+.formula {
+    border-left: 4px solid #ff0066; /* Magenta accent */
+    background: #111;
+    color: #33cc33; /* Matrix/Terminal green */
+    font-size: 1.1em;
+}
+
+/* Three Column Grid for Visualizations */
+.three-col-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 20px;
+    margin-top: 30px;
+    margin-bottom: 20px;
+}
+
+.three-col-grid figure {
+    margin: 0;
+    background: #1a1a1a;
+    padding: 15px;
+    border-radius: 8px;
+    border: 1px solid #333;
+    transition: transform 0.2s ease;
+}
+
+.three-col-grid figure:hover {
+    border-color: #ff0066;
+}
+
+/* Case 1: Total Attraction (Clamp at 0°) */
+@keyframes total-att-1 { 0%, 100% { transform: rotate(60deg) translate(58px); background: hsl(60, 85%, 60%); } 50% { transform: rotate(0deg) translate(58px); background: hsl(0, 85%, 60%); } }
+@keyframes total-att-2 { 0%, 100% { transform: rotate(120deg) translate(58px); background: hsl(120, 85%, 60%); } 50% { transform: rotate(0deg) translate(58px); background: hsl(0, 85%, 60%); } }
+@keyframes total-att-3 { 0%, 100% { transform: rotate(-60deg) translate(58px); background: hsl(300, 85%, 60%); } 50% { transform: rotate(0deg) translate(58px); background: hsl(360, 85%, 60%); } }
+@keyframes total-att-4 { 0%, 100% { transform: rotate(-120deg) translate(58px); background: hsl(240, 85%, 60%); } 50% { transform: rotate(0deg) translate(58px); background: hsl(360, 85%, 60%); } }
+
+/* Case 2: Total Repulsion (Clamp at 180°) */
+@keyframes total-rep-1 { 0%, 100% { transform: rotate(60deg) translate(58px); background: hsl(60, 85%, 60%); } 50% { transform: rotate(180deg) translate(58px); background: hsl(180, 85%, 60%); } }
+@keyframes total-rep-2 { 0%, 100% { transform: rotate(120deg) translate(58px); background: hsl(120, 85%, 60%); } 50% { transform: rotate(180deg) translate(58px); background: hsl(180, 85%, 60%); } }
+@keyframes total-rep-3 { 0%, 100% { transform: rotate(-60deg) translate(58px); background: hsl(300, 85%, 60%); } 50% { transform: rotate(-180deg) translate(58px); background: hsl(180, 85%, 60%); } }
+@keyframes total-rep-4 { 0%, 100% { transform: rotate(-120deg) translate(58px); background: hsl(240, 85%, 60%); } 50% { transform: rotate(-180deg) translate(58px); background: hsl(180, 85%, 60%); } }
+
+/* Case 3: Crossing Allowed (Bounce through 0°) */
+@keyframes cross-att-1 { 
+    0%, 100% { transform: rotate(60deg) translate(58px); background: hsl(60, 85%, 60%); } 
+    25%, 75% { transform: rotate(0deg) translate(58px); background: hsl(0, 85%, 60%); }
+    50% { transform: rotate(-60deg) translate(58px); background: hsl(300, 85%, 60%); } 
+}
+@keyframes cross-att-2 { 
+    0%, 100% { transform: rotate(120deg) translate(58px); background: hsl(120, 85%, 60%); } 
+    25%, 75% { transform: rotate(0deg) translate(58px); background: hsl(0, 85%, 60%); }
+    50% { transform: rotate(-120deg) translate(58px); background: hsl(240, 85%, 60%); } 
+}
+@keyframes cross-att-3 { 
+    0%, 100% { transform: rotate(-60deg) translate(58px); background: hsl(300, 85%, 60%); } 
+    25%, 75% { transform: rotate(0deg) translate(58px); background: hsl(360, 85%, 60%); }
+    50% { transform: rotate(60deg) translate(58px); background: hsl(60, 85%, 60%); } 
+}
+@keyframes cross-att-4 { 
+    0%, 100% { transform: rotate(-120deg) translate(58px); background: hsl(240, 85%, 60%); } 
+    25%, 75% { transform: rotate(0deg) translate(58px); background: hsl(360, 85%, 60%); }
+    50% { transform: rotate(120deg) translate(58px); background: hsl(120, 85%, 60%); } 
+}
+
+
+/* Mapping Classes to Animations */
+.total-attract .pt-1 { animation: total-att-1 4s ease-in-out infinite; }
+.total-attract .pt-2 { animation: total-att-2 4s ease-in-out infinite; }
+.total-attract .pt-3 { animation: total-att-3 4s ease-in-out infinite; }
+.total-attract .pt-4 { animation: total-att-4 4s ease-in-out infinite; }
+
+.total-repel .pt-1 { animation: total-rep-1 4s ease-in-out infinite; }
+.total-repel .pt-2 { animation: total-rep-2 4s ease-in-out infinite; }
+.total-repel .pt-3 { animation: total-rep-3 4s ease-in-out infinite; }
+.total-repel .pt-4 { animation: total-rep-4 4s ease-in-out infinite; }
+
+.cross-attract .pt-1 { animation: cross-att-1 4s ease-in-out infinite; }
+.cross-attract .pt-2 { animation: cross-att-2 4s ease-in-out infinite; }
+.cross-attract .pt-3 { animation: cross-att-3 4s ease-in-out infinite; }
+.cross-attract .pt-4 { animation: cross-att-4 4s ease-in-out infinite; }
+
+/* Directional Arrows for Hue Points
+  Exploits the local tangential Y-axis created by the rotation transform.
+*/
+.pt::after {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 11px;
+    color: #fff;
+    text-shadow: 0 0 4px rgba(0, 0, 0, 0.9), 0 0 2px rgba(255, 255, 255, 0.3);
+    pointer-events: none;
+}
+
+/* Points Moving Clockwise 
+  (Pushed along the positive local Y-axis) 
+*/
+.attract-container .pt-1::after, 
+.attract-container .pt-2::after, 
+.attract-container .pt-5::after,
+.repel-container .pt-3::after, 
+.repel-container .pt-4::after,
+.total-attract .pt-3::after, 
+.total-attract .pt-4::after,
+.total-repel .pt-1::after, 
+.total-repel .pt-2::after,
+.cross-attract .pt-3::after, 
+.cross-attract .pt-4::after {
+    content: "▼";
+    transform: translateY(15px); 
+}
+
+/* Points Moving Counter-Clockwise 
+  (Pushed along the negative local Y-axis) 
+*/
+.attract-container .pt-3::after, 
+.attract-container .pt-4::after,
+.repel-container .pt-1::after, 
+.repel-container .pt-2::after, 
+.repel-container .pt-5::after,
+.total-attract .pt-1::after, 
+.total-attract .pt-2::after,
+.total-repel .pt-3::after, 
+.total-repel .pt-4::after,
+.cross-attract .pt-1::after, 
+.cross-attract .pt-2::after {
+    content: "▲";
+    transform: translateY(-16px); 
+}
+
+
+/* Image Crossfade System */
+.crossfade-container {
+    position: relative;
+    width: 100%;
+    margin-bottom: 10px;
+}
+
+.crossfade-container img {
+    width: 100%;
+    height: auto;
+    border-radius: 8px;
+    border: 1px solid #444;
+    display: block; /* Removes baseline ghost gap */
+}
+
+.crossfade-container .cf-top {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    /* Syncs exactly with your 3.5s dot animations */
+    animation: sync-fade 3.5s ease-in-out infinite;
+}
+
+/* 0/100% = Dots at start = Opacity 0 (Original Image shows) */
+/* 50% = Dots at end = Opacity 1 (Modified Image shows) */
+@keyframes sync-fade {
+    0%, 10%, 90%, 100% { opacity: 0; } /* Added a tiny buffer at the 0% mark too for symmetry */
+    45%, 55%           { opacity: 1; }
+}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <h1 class="title">GaHueMa</h1>
+            <p class="subtitle">A Hue Attractor/Repulsor</p>
+            <a href="index.html" class="nav-link">← Back to App</a>
+        </header>
+
+<section class="content-section">
+    <h2>The Concept</h2>
+    <p>
+        <strong>GaHueMa</strong> is a web-based image processing tool designed for hue manipulation. A specific hue is set as an <strong>anchor point</strong> where other colors are pulled towards (attraction) or pushed away (repulsion).
+    </p>
+
+    <div class="concept-example" style="text-align: center;">
+        <h3 style="font-size: 0.9em; text-transform: uppercase; letter-spacing: 1px; color: #888;">Original Reference</h3>
+        <img src="harlequin.jpg" alt="Original Harlequin Image" class="original-preview" style="width:30%">
+    </div>
+
+    <div class="concept-example">
+        <h3 style="border-bottom: 1px solid #333; padding-bottom: 10px;">Transformation Effects</h3>
+        <div class="side-by-side-examples two-col-grid">
+            
+            <figure>
+    <div class="crossfade-container">
+        <img src="harlequin.jpg" alt="Original Harlequin Image" class="cf-base">
+        <img src="harlequin-repel.jpg" alt="Hue repulsion example" class="cf-top">
+    </div>
+    <figcaption><strong>Repulsion:</strong> Hues pushed away from the red anchor.</figcaption>
+    <div class="hue-wheel-demo repel-container">
+        <div class="hue-wheel">
+            <div class="anchor-point" title="Anchor: Red (0°)"></div>
+            <div class="pt pt-1"></div>
+            <div class="pt pt-2"></div>
+            <div class="pt pt-3"></div>
+            <div class="pt pt-4"></div>
+            <div class="pt pt-5"></div>
+        </div>
+    </div>
+</figure>
+
+<figure>
+    <div class="crossfade-container">
+        <img src="harlequin.jpg" alt="Original Harlequin Image" class="cf-base">
+        <img src="harlequin-attract.jpg" alt="Hue attraction example" class="cf-top">
+    </div>
+    <figcaption><strong>Attraction:</strong> Hues pulled towards the red anchor.</figcaption>
+    <div class="hue-wheel-demo attract-container">
+        <div class="hue-wheel">
+            <div class="anchor-point" title="Anchor: Red (0°)"></div>
+            <div class="pt pt-1"></div>
+            <div class="pt pt-2"></div>
+            <div class="pt pt-3"></div>
+            <div class="pt pt-4"></div>
+            <div class="pt pt-5"></div>
+        </div>
+    </div>
+</figure>
+
+        </div>
+    </div>
+</section>
+
+        <section class="content-section">
+            <h2>How to Use</h2>
+            <ul>
+                <li><strong>Upload:</strong> Drag an image into the workspace. You can keep dragging images into the works</li>
+                <li><strong>Sample:</strong> Click anywhere on the original image to set your <code>Anchor Hue</code> directly from a pixel.</li>
+                <li><strong>Tweak:</strong> Use the "Prevent Crossing" toggle to maintain the logical order of the color wheel.</li>
+                <li><strong>Export:</strong> Save your result as a PNG.</li>
+            </ul>
+        </section>
+
+
+        <section class="content-section">
+<h2>Transformation Modes</h2>
+
+<h3>Add</h3>
+<p>
+Add shifts each hue relative to the anchor point by a fixed number of degrees. Positive values push hues farther away from the anchor point, while negative values pull hues toward it.
+</p>
+
+<h3>Multiply</h3>
+<p>
+Multiply scales the shortest hue distance between a hue and the anchor point. For example, if a hue is 20° clockwise from the anchor point, a factor of 2 moves it 40° clockwise from the anchor point. Values greater than 1 push hues farther away, while fractional values such as 0.5 pull them closer to the anchor point.
+</p>
+<p>
+Negative values flip the hue across the anchor point. For example, if a hue is 20° clockwise from the anchor point, a factor of -2 moves it 40° counter-clockwise from the anchor point.
+</p>
+
+<h3>Prevent Crossing Anchor Point</h3>
+<p>
+By default, crossing the anchor point is prevented. If a transformation would cause a hue to pass through either the anchor point or its opposite point on the hue wheel, the result is clamped to that boundary instead. This keeps hues from wrapping across the anchor axis.
+</p>
+<p>
+With negative multiplication, this option causes hues to collapse to a boundary, because negative multiplication is designed to flip hues around the anchor point.
+</p>
+<div class="three-col-grid">
+    <figure>
+        <div class="hue-wheel-demo total-attract">
+            <div class="hue-wheel">
+                <div class="anchor-point" title="Anchor: Red (0°)"></div>
+                <div class="pt pt-1"></div>
+                <div class="pt pt-2"></div>
+                <div class="pt pt-3"></div>
+                <div class="pt pt-4"></div>
+            </div>
+        </div>
+        <figcaption><strong>Total Attraction</strong><br>Hues collapse and clamp at the anchor.</figcaption>
+    </figure>
+
+    <figure>
+        <div class="hue-wheel-demo total-repel">
+            <div class="hue-wheel">
+                <div class="anchor-point" title="Anchor: Red (0°)"></div>
+                <div class="pt pt-1"></div>
+                <div class="pt pt-2"></div>
+                <div class="pt pt-3"></div>
+                <div class="pt pt-4"></div>
+            </div>
+        </div>
+        <figcaption><strong>Total Repulsion</strong><br>Hues collapse and clamp at the opposite pole.</figcaption>
+    </figure>
+
+    <figure>
+        <div class="hue-wheel-demo cross-attract">
+            <div class="hue-wheel">
+                <div class="anchor-point" title="Anchor: Red (0°)"></div>
+                <div class="pt pt-1"></div>
+                <div class="pt pt-2"></div>
+                <div class="pt pt-3"></div>
+                <div class="pt pt-4"></div>
+            </div>
+        </div>
+        <figcaption><strong>Crossing Allowed</strong><br>Hues attract freely, crossing the anchor axis entirely.</figcaption>
+    </figure>
+</div>
+<h3>Binomial</h3>
+<p>
+Binomial combines multiplication, power, and additive offset into a single transformation:
+</p>
+<p><code>M · Δh<sup>P</sup> + A</code></p>
+<p>
+Here, Δh is the signed shortest hue distance from the anchor point, M is the multiplier, P is the power, and A is the additive offset. The distance is transformed first by the power and multiplier, then shifted by the offset.
+</p>
+<p>
+If <code>P = 1</code>, the transformation behaves like a standard add/multiply operation. If <code>M = 1</code> and <code>A = 0</code>, there is no change.
+</p>
+<p>
+The power changes how strongly hues respond based on their distance from the anchor point. For example, if a hue is 10° from the anchor point and <code>P = 2</code>, that distance becomes 100° before the multiplier and offset are applied. This makes farther movement much more dramatic. If <code>P &lt; 1</code>, distances are compressed instead, which can pull hues into a tighter band around the anchor point.
+</p>
+
+        </section>
+
+
+
+    </div>
+</body>
+</html>
