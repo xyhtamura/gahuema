@@ -5,14 +5,27 @@
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Averia+Sans+Libre:wght@700&display=swap');
     
+	
+/* UI STYLES */	
+	
     body {
       background-color: #303030;
       color: #cccac6;
       margin: 0;
       padding: 0;
     }
-    
-    /* Top Navigation for About/Manual */
+   
+      .container {
+      max-width: 1100px; /* Widened for better side-by-side canvas display */
+      margin: 0 auto;
+      padding: 0 20px 40px 20px;
+      font-family: system-ui, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+   
     .top-bar {
       width: 100%;
       padding: 15px 30px;
@@ -38,15 +51,6 @@
       text-shadow: 0 0 8px rgba(51, 204, 51, 0.4);
     }
 
-    .container {
-      max-width: 1100px; /* Widened for better side-by-side canvas display */
-      margin: 0 auto;
-      padding: 0 20px 40px 20px;
-      font-family: system-ui, sans-serif;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-    }
 
     .title-container {
       text-align: center;
@@ -64,7 +68,8 @@
       color: transparent;
       text-shadow: 2px 2px 4px rgba(0,0,0,0.1);
     }
-    
+	
+
     .subtitle {
       font-family: 'Averia Sans Libre', cursive;
       font-size: 1.2em;
@@ -72,6 +77,9 @@
       margin: 0 0 20px 0;
       letter-spacing: 1px;
     }
+
+/*WORKPLACE & DROP-ZONE*/	
+    
 
     .workspace-zone {
       border: 2px dashed #555;
@@ -105,6 +113,8 @@
       font-size: 1.1em;
       color: #888;
     }
+
+/*CANVAS & PIXEL DISPLAY*/
 
     .canvas-wrapper-flex {
       display: flex;
@@ -148,8 +158,9 @@
       font-size: 14px;
       color: #aaa;
     }
+	
+/* UI & Input Styles*/
 
-    /* Controls Restructuring */
     .controls {
       width: 100%;
       margin: 30px 0;
@@ -202,6 +213,50 @@
       border: 3px solid #404040;
       box-shadow: 0 4px 10px rgba(0,0,0,0.4);
     }
+
+
+    /* Input and Select Styles */
+    input[type="number"], input[type="text"], select{
+      background: #1a1a1a;
+      color: #cccac6;
+      border: 1px solid #444;
+      border-radius: 6px;
+      padding: 10px;
+      font-size: 15px;
+      width: 80%;
+      max-width: 200px;
+      text-align: center;
+      transition: background-color 0.2s ease, border-color 0.2s ease;
+    }
+
+    input[type="number"]:hover, select:hover {
+      background: #252525;
+      border-color: #666;
+    }
+
+    input[type="number"]:focus, select:focus {
+      background: #303030;
+      border-color: #3399ff;
+      outline: none;
+    }
+	
+	    .checkbox-group {
+      margin-top: 20px;
+      padding-top: 15px;
+      border-top: 1px solid #444;
+      width: 100%;
+      text-align: center;
+    }
+
+    .checkbox-group label {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      cursor: pointer;
+    }
+	
+/*SLIDER STYLES*/
     
     .hue-slider-container {
       position: relative;
@@ -249,48 +304,39 @@
       box-shadow: 0 2px 5px rgba(0,0,0,0.5);
     }
 
-    /* Input and Select Styles */
-    input[type="number"], input[type="text"], select{
-      background: #1a1a1a;
-      color: #cccac6;
-      border: 1px solid #444;
-      border-radius: 6px;
-      padding: 10px;
-      font-size: 15px;
-      width: 80%;
-      max-width: 200px;
-      text-align: center;
-      transition: background-color 0.2s ease, border-color 0.2s ease;
-    }
 
-    input[type="number"]:hover, select:hover {
-      background: #252525;
-      border-color: #666;
-    }
+	.slider-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  margin-bottom: 15px;
+}
 
-    input[type="number"]:focus, select:focus {
-      background: #303030;
-      border-color: #3399ff;
-      outline: none;
-    }
+.slider-row input[type="number"] {
+  width: 60px; /* Smaller for min/max */
+  padding: 5px;
+  font-size: 12px;
+}
 
-    .checkbox-group {
-      margin-top: 20px;
-      padding-top: 15px;
-      border-top: 1px solid #444;
-      width: 100%;
-      text-align: center;
-    }
+.slider-row .val-input {
+  width: 80px;
+  font-size: 14px;
+  border-color: #3399ff;
+}
 
-    .checkbox-group label {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 10px;
-      cursor: pointer;
-    }
+.slider-row input[type="range"] {
+  flex-grow: 1;
+  cursor: pointer;
+}
 
-    /* Buttons */
+.min-input, .max-input {
+  color: #888 !important;
+  background: #111 !important;
+}
+
+
+/* BUTTONS */
     .button-group {
       display: flex;
       gap: 15px;
@@ -326,6 +372,7 @@
     .button.primary:hover {
       background: #2880db;
     }
+	
   </style>
 </head>
 <body>
@@ -374,53 +421,77 @@
     <div class="controls">
       <div class="controls-grid">
         
-        <div class="control-panel">
-          <div class="input-group">
-            <label for="transformType">Transform Type:</label>
-            <select id="transformType">
-              <option value="add">Add</option>
-              <option value="multiply">Multiply</option>
-              <option value="binomial">Binomial (M * Δh^P + A)</option>
-            </select>
-          </div>
-          
-          <div id="basicControls" class="input-group">
-            <label for="factor" id="factorLabel">Shift Amount (°):</label>
-            <input type="number" id="factor" step="0.1" value="1.5">
-          </div>
-
-          <div id="binomialControls" style="display: none; width: 100%;">
-            <div class="input-group">
-              <label for="advM">Multiplier (M):</label>
-              <input type="number" id="advM" step="0.01" value="1">
-            </div>
-            <div class="input-group">
-              <label for="advP">Power (P):</label>
-              <input type="number" id="advP" step="0.01" value="1">
-            </div>
-            <div class="input-group">
-              <label for="advA">Offset (A):</label>
-              <input type="number" id="advA" step="0.1" value="0">
-            </div>
+<div class="controls">
+  <div class="controls-grid">
+    
+    <div class="control-panel">
+      <div class="input-group">
+        <label for="transformType">Transform Type:</label>
+        <select id="transformType">
+          <option value="add">Add</option>
+          <option value="multiply">Multiply</option>
+          <option value="binomial">Binomial (M * Δh^P + A)</option>
+        </select>
+      </div>
+      
+      <div id="basicControls" style="width: 100%;">
+        <div class="dynamic-slider-group" data-param="factor">
+          <label id="factorLabel">Shift Amount (°):</label>
+          <div class="slider-row">
+            <input type="number" id="factor" class="val-input" step="0.1" value="1.5">
+            <input type="number" class="min-input" value="-180" title="Min">
+            <input type="range" class="param-slider" step="0.01">
+            <input type="number" class="max-input" value="180" title="Max">
           </div>
         </div>
+      </div>
 
-        <div class="control-panel">
-          <div class="color-preview" id="anchorPreview"></div>
-          
-          <div class="input-group" style="width: 90%;">
-            <label for="anchorHue">Anchor Hue (0-360°):</label>
-            <input type="range" id="hueSlider" class="hue-slider" min="0" max="360" value="180">
-            <input type="number" id="anchorHue" min="0" max="360" value="180" step="1">
-          </div>
-          
-          <div class="checkbox-group">
-            <label>
-              <input type="checkbox" id="preventCrossing" checked>
-              Prevent Crossing Anchor Point
-            </label>
+      <div id="binomialControls" style="display: none; width: 100%;">
+        <div class="dynamic-slider-group" data-param="advM">
+          <label>Multiplier (M):</label>
+          <div class="slider-row">
+            <input type="number" id="advM" class="val-input" step="0.01" value="1">
+            <input type="number" class="min-input" value="-3" title="Min">
+            <input type="range" class="param-slider" step="0.01">
+            <input type="number" class="max-input" value="3" title="Max">
           </div>
         </div>
+        <div class="dynamic-slider-group" data-param="advP">
+          <label>Power (P):</label>
+          <div class="slider-row">
+            <input type="number" id="advP" class="val-input" step="0.01" value="1">
+            <input type="number" class="min-input" value="-2" title="Min">
+            <input type="range" class="param-slider" step="0.01">
+            <input type="number" class="max-input" value="2" title="Max">
+          </div>
+        </div>
+        <div class="dynamic-slider-group" data-param="advA">
+          <label>Offset (A):</label>
+          <div class="slider-row">
+            <input type="number" id="advA" class="val-input" step="0.1" value="0">
+            <input type="number" class="min-input" value="-180" title="Min">
+            <input type="range" class="param-slider" step="0.01">
+            <input type="number" class="max-input" value="180" title="Max">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="control-panel">
+      <div class="color-preview" id="anchorPreview"></div>
+      <div class="input-group" style="width: 90%;">
+        <label for="anchorHue">Anchor Hue (0-360°):</label>
+        <input type="range" id="hueSlider" class="hue-slider" min="0" max="360" value="180">
+        <input type="number" id="anchorHue" min="0" max="360" value="180" step="1">
+      </div>
+      <div class="checkbox-group">
+        <label><input type="checkbox" id="preventCrossing" checked> Prevent Crossing</label>
+      </div>
+    </div>
+  </div>
+  </div>
+
+
 
       </div>
 

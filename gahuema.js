@@ -85,24 +85,7 @@ function shortestHueDiff(pixelHue, anchorHue) {
   return raw > 180 ? raw - 360 : raw;
 }
 
-// ─── Term primitives ──────────────────────────────────────────────────────────
-
-/**
- * Direction-aware constant step — the core of 'add' mode.
- * Always moves toward the anchor by a fixed amount.
- */
-function addTerm(hueDiff, factor) {
-  return hueDiff >= 0 ? factor : -factor;
-}
-
-/**
- * Proportional displacement — the core of 'multiply' mode.
- * Net movement = how far hueDiff would travel under scaling by `factor`.
- */
-function multiplyTerm(hueDiff, factor) {
-  return hueDiff * (factor - 1);
-}
-
+//GAHUEMA PROCESSING
 // ─── Crossing prevention ──────────────────────────────────────────────────────
 
 /**
@@ -124,9 +107,6 @@ function applyPreventCrossing(pixelHue, anchorHue, hueDiff, totalMove) {
 
   return normalizeAngle(pixelHue + totalMove);
 }
-
-// ─── Transform modes ──────────────────────────────────────────────────────────
-
 
 // ─── Refactored Transform Engine ──────────────────────────────────────────────
 
@@ -234,8 +214,61 @@ function scheduleProcess() {
   debounceTimer = setTimeout(processImage, 80);
 }
 
+//DYNAMIC SLIDERS
+
 // ─── UI: control panel visibility ─────────────────────────────────────────────
 
+function initDynamicSliders() {
+  const groups = document.querySelectorAll('.dynamic-slider-group');
+
+  groups.forEach(group => {
+    const valInput = group.querySelector('.val-input');
+    const minInput = group.querySelector('.min-input');
+    const maxInput = group.querySelector('.max-input');
+    const slider   = group.querySelector('.param-slider');
+
+    const sync = () => {
+      let val = parseFloat(valInput.value) || 0;
+      let min = parseFloat(minInput.value) || 0;
+      let max = parseFloat(maxInput.value) || 100;
+
+      // 1. Expand range if value exceeds bounds
+      if (val < min) {
+        min = val;
+        minInput.value = min;
+      }
+      if (val > max) {
+        max = val;
+        maxInput.value = max;
+      }
+
+      // 2. Update slider attributes
+      slider.min = min;
+      slider.max = max;
+      slider.value = val;
+    };
+
+    // Listeners
+    valInput.addEventListener('input', () => {
+      sync();
+      if (originalImageData) scheduleProcess();
+    });
+
+    slider.addEventListener('input', () => {
+      valInput.value = slider.value;
+      if (originalImageData) scheduleProcess();
+    });
+
+    [minInput, maxInput].forEach(el => {
+      el.addEventListener('input', () => {
+        sync(); // Re-calc bounds
+      });
+    });
+
+    // Initialize state
+    sync();
+  });
+}
 
 const basicControls    = document.getElementById('basicControls');
 const binomialControls = document.getElementById('binomialControls');
@@ -252,7 +285,6 @@ function updateControlVisibility() {
     basicControls.style.display = 'none';
     binomialControls.style.display = 'block';
   } else {
-    // CHANGE: Use 'flex' here so it respects the .input-group CSS rules
     basicControls.style.display = 'flex'; 
     binomialControls.style.display = 'none';
     if (factorLabel && factorLabels[mode]) {
@@ -261,11 +293,25 @@ function updateControlVisibility() {
   }
 }
 
-// ... rest of the code ...
 
-// IMPORTANT: Check the very end of your file. 
-// You have an extra "}" after the uploadBtn listener that needs to be removed.
 transformSelect.addEventListener('change', () => {
+  const mode = transformSelect.value;
+  const factorGroup = document.querySelector('[data-param="factor"]');
+  
+  if (mode === 'multiply') {
+    factorGroup.querySelector('.min-input').value = -3;
+    factorGroup.querySelector('.max-input').value = 3;
+    factorGroup.querySelector('.val-input').value = 1.1; // reasonable default for scaling
+  } else if (mode === 'add') {
+    factorGroup.querySelector('.min-input').value = 0;
+    factorGroup.querySelector('.max-input').value = 180;
+    factorGroup.querySelector('.val-input').value = 1.5;
+  }
+
+  // Re-sync the specific factor slider after changing defaults
+  const valIn = factorGroup.querySelector('.val-input');
+  valIn.dispatchEvent(new Event('input')); 
+  
   updateControlVisibility();
   if (originalImageData) scheduleProcess();
 });
@@ -301,6 +347,7 @@ document.querySelector('.controls').addEventListener('input', (e) => {
   if (originalImageData) scheduleProcess();
 });
 
+//PIXEL HOVER AND CANVAS
 // ─── UI: pixel info display ───────────────────────────────────────────────────
 
 function getPixelInfo(canvas, x, y) {
@@ -450,3 +497,5 @@ if (uploadBtn) {
     imageInput.click();
   });
 }
+
+initDynamicSliders();
