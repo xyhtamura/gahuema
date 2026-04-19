@@ -2,12 +2,13 @@
 
 let originalImageData = null;
 let debounceTimer = null;
+let anchorS = 100; // saturation for preview crosshair / slider thumb color
+let anchorL = 50;  // lightness for preview crosshair / slider thumb color
 
 // ─── Element refs ─────────────────────────────────────────────────────────────
 
 const imageInput        = document.getElementById('imageInput');
 const anchorHueInput    = document.getElementById('anchorHue');
-const hueSlider         = document.getElementById('hueSlider');
 const anchorPreview     = document.getElementById('anchorPreview');
 const factorInput       = document.getElementById('factor');
 const transformSelect   = document.getElementById('transformType');
@@ -303,7 +304,7 @@ transformSelect.addEventListener('change', () => {
     factorGroup.querySelector('.max-input').value = 3;
     factorGroup.querySelector('.val-input').value = 1.1; // reasonable default for scaling
   } else if (mode === 'add') {
-    factorGroup.querySelector('.min-input').value = 0;
+    factorGroup.querySelector('.min-input').value = -180;
     factorGroup.querySelector('.max-input').value = 180;
     factorGroup.querySelector('.val-input').value = 1.5;
   }
@@ -321,29 +322,165 @@ updateControlVisibility();
 // ─── UI: anchor hue controls ──────────────────────────────────────────────────
 
 function updateAnchorPreview(hue) {
-  anchorPreview.style.backgroundColor = `hsl(${hue}, 100%, 50%)`;
+  const canvas = document.getElementById('anchorPreview');
+  const ctx = canvas.getContext('2d');
+  const width = canvas.width;
+  const height = canvas.height;
+
+  // Draw the HSL gradient square
+  // X-axis: Saturation (0% to 100%)
+  // Y-axis: Lightness (100% at top to 0% at bottom)
+  for (let y = 0; y < height; y++) {
+    const lightness = 100 - (y / height) * 100;
+    for (let x = 0; x < width; x++) {
+      const saturation = (x / width) * 100;
+      ctx.fillStyle = `hsl(${hue}, ${saturation}%, ${lightness}%)`;
+      ctx.fillRect(x, y, 1, 1);
+    }
+  }
+
+  // Draw crosshair at current anchorS / anchorL position
+  const cx = (anchorS / 100) * width;
+  const cy = ((100 - anchorL) / 100) * height;
+  const r = 6;
+
+  // Shadow for visibility on any background
+  ctx.save();
+  ctx.strokeStyle = 'rgba(0,0,0,0.5)';
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(cx - r - 1, cy); ctx.lineTo(cx + r + 1, cy);
+  ctx.moveTo(cx, cy - r - 1); ctx.lineTo(cx, cy + r + 1);
+  ctx.stroke();
+
+  ctx.strokeStyle = 'white';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(cx - r, cy); ctx.lineTo(cx + r, cy);
+  ctx.moveTo(cx, cy - r); ctx.lineTo(cx, cy + r);
+  ctx.stroke();
+
+  // Small circle around the point
+  ctx.beginPath();
+  ctx.arc(cx, cy, r - 1, 0, Math.PI * 2);
+  ctx.strokeStyle = 'rgba(0,0,0,0.5)';
+  ctx.lineWidth = 2.5;
+  ctx.stroke();
+  ctx.strokeStyle = 'white';
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+  ctx.restore();
 }
 
-anchorHueInput.addEventListener('input', (e) => {
-  const value = Math.min(360, Math.max(0, parseFloat(e.target.value) || 0));
-  hueSlider.value = value;
-  updateAnchorPreview(value);
-  if (originalImageData) scheduleProcess();
-});
+// ─── Interactive SL picker on anchorPreview ───────────────────────────────────
 
-hueSlider.addEventListener('input', (e) => {
-  const value = parseFloat(e.target.value);
-  anchorHueInput.value = value;
-  updateAnchorPreview(value);
-  if (originalImageData) scheduleProcess();
-});
+(function initSLPicker() {
+  const canvas = document.getElementById('anchorPreview');
+  let picking = false;
 
-updateAnchorPreview(parseFloat(anchorHueInput.value));
+  function pickSL(e) {
+    const rect = canvas.getBoundingClientRect();
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    const x = Math.max(0, Math.min(canvas.width,  (clientX - rect.left) * (canvas.width  / rect.width)));
+    const y = Math.max(0, Math.min(canvas.height, (clientY - rect.top)  * (canvas.height / rect.height)));
+
+    anchorS = Math.round((x / canvas.width)  * 100);
+    anchorL = Math.round(100 - (y / canvas.height) * 100);
+
+    const hue = parseFloat(document.getElementById('anchorHue').value) || 0;
+
+    // Redraw the SL field with updated crosshair
+    updateAnchorPreview(hue);
+
+    // Update hue slider thumb to reflect chosen S/L
+    const thumb = document.getElementById('hueSliderThumb');
+    if (thumb) thumb.style.backgroundColor = `hsl(${hue}, ${anchorS}%, ${anchorL}%)`;
+  }
+
+  canvas.addEventListener('pointerdown', (e) => {
+    picking = true;
+    canvas.setPointerCapture(e.pointerId);
+    pickSL(e);
+    e.preventDefault();
+  });
+  canvas.addEventListener('pointermove', (e) => {
+    if (!picking) return;
+    pickSL(e);
+  });
+  canvas.addEventListener('pointerup',     () => { picking = false; });
+  canvas.addEventListener('pointercancel', () => { picking = false; });
+})();
+
+// ─── Custom circular hue slider ───────────────────────────────────────────────
+
+(function initCircularHueSlider() {
+  const track    = document.getElementById('hueSlider');
+  const gradient = document.getElementById('hueSliderGradient');
+  const thumb    = document.getElementById('hueSliderThumb');
+
+  // px of drag == 1° of hue  (360° spread across the track width feels natural)
+  // We'll compute px-per-degree dynamically from track width.
+  let currentHue = parseFloat(anchorHueInput.value) || 180;
+  // gradientOffset tracks how many px the gradient has been shifted
+  // We map hue -> offset so that hue 0 and hue 360 wrap seamlessly.
+  // Strategy: offset = -(currentHue / 360) * trackWidth, clamped to one period.
+  let isDragging = false;
+  let dragStartX = 0;
+  let dragStartHue = currentHue;
+
+  function pxPerDegree() {
+    return track.offsetWidth / 360;
+  }
+
+  function applyHue(hue) {
+    hue = ((hue % 360) + 360) % 360; // normalize
+    currentHue = hue;
+    // Shift gradient so the selected hue color sits under the center thumb.
+    // gradient left is -100% (== -trackWidth), so center of gradient strip
+    // corresponds to hue 180 at offset 0. We shift by -(hue - 180) * pxPerDeg.
+    const offset = -(hue - 180) * pxPerDegree();
+    gradient.style.transform = `translateX(${offset}px)`;
+    thumb.style.backgroundColor = `hsl(${hue}, ${anchorS}%, ${anchorL}%)`;
+    anchorHueInput.value = Math.round(hue);
+    track.setAttribute('aria-valuenow', Math.round(hue));
+    updateAnchorPreview(hue);
+    if (originalImageData) scheduleProcess();
+  }
+
+  // Init
+  applyHue(currentHue);
+
+  // Pointer events for drag
+  track.addEventListener('pointerdown', (e) => {
+    isDragging = true;
+    dragStartX = e.clientX;
+    dragStartHue = currentHue;
+    track.setPointerCapture(e.pointerId);
+    e.preventDefault();
+  });
+
+  track.addEventListener('pointermove', (e) => {
+    if (!isDragging) return;
+    const dx = e.clientX - dragStartX;
+    const deltaHue = dx / pxPerDegree();
+    applyHue(dragStartHue - deltaHue); // drag right = hue increases (gradient scrolls left)
+  });
+
+  track.addEventListener('pointerup',    () => { isDragging = false; });
+  track.addEventListener('pointercancel',() => { isDragging = false; });
+
+  // Sync from number input
+  anchorHueInput.addEventListener('input', (e) => {
+    const value = Math.min(360, Math.max(0, parseFloat(e.target.value) || 0));
+    applyHue(value);
+  });
+})();
 
 // Live reprocess on any parameter control change
 document.querySelector('.controls').addEventListener('input', (e) => {
   // Exclude inputs already handled above and the transform select
-  if (e.target === anchorHueInput || e.target === hueSlider || e.target === transformSelect) return;
+  if (e.target === anchorHueInput || e.target === transformSelect) return;
   if (originalImageData) scheduleProcess();
 });
 
@@ -395,10 +532,9 @@ function setAnchorFromCanvas(canvas, e) {
   if (x < 0 || x >= canvas.width || y < 0 || y >= canvas.height) return;
 
   const { hue } = getPixelInfo(canvas, x, y);
+  // Dispatch an input event on the number input so the circular slider IIFE syncs
   anchorHueInput.value = hue;
-  hueSlider.value      = hue;
-  updateAnchorPreview(hue);
-  if (originalImageData) scheduleProcess();
+  anchorHueInput.dispatchEvent(new Event('input'));
 }
 
 // Single set of listeners per canvas — no duplicates

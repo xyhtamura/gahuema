@@ -1,6 +1,8 @@
 <!DOCTYPE html>
 <html>
 <head>
+
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3ClinearGradient id='gf' x1='0%25' y1='100%25' x2='100%25' y2='0%25'%3E%3Cstop offset='0%25' stop-color='%23ff0066'/%3E%3Cstop offset='33%25' stop-color='%23ff9933'/%3E%3Cstop offset='66%25' stop-color='%2333cc33'/%3E%3Cstop offset='100%25' stop-color='%233399ff'/%3E%3C/linearGradient%3E%3CclipPath id='fc'%3E%3Cpath d='M28 8L28 22C12 28 10 62 32 62C54 62 52 28 36 22L36 8Z'/%3E%3C/clipPath%3E%3C/defs%3E%3Cg clip-path='url(%23fc)'%3E%3Crect x='0' y='32' width='64' height='32' fill='url(%23gf)'/%3E%3Cellipse cx='32' cy='32' rx='16' ry='4' fill='%23ffb366' opacity='0.9'/%3E%3C/g%3E%3Cpath d='M28 8L28 22C12 28 10 62 32 62C54 62 52 28 36 22L36 8Z' fill='none' stroke='%23886bff' stroke-width='4' stroke-linejoin='round'/%3E%3Crect x='24' y='4' width='16' height='6' rx='2' fill='%23886bff'/%3E%3Cpath d='M18 42A14 14 0 0 0 28 56' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' opacity='0.5'/%3E%3C/svg%3E">
 <title>GaHueMa</title>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Averia+Sans+Libre:wght@700&display=swap');
@@ -205,15 +207,17 @@
       color: #bbb;
     }
 
-    .color-preview {
-      width: 60px;
-      height: 60px;
-      border-radius: 30px;
-      margin: 0 auto 15px auto;
-      border: 3px solid #404040;
-      box-shadow: 0 4px 10px rgba(0,0,0,0.4);
-    }
-
+.color-preview {
+  width: 180px;
+  height: 180px;
+  border-radius: 4px;
+  margin: 0 auto 15px auto;
+  border: 2px solid #444;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.4);
+  display: block;
+  cursor: crosshair;
+  touch-action: none;
+}
 
     /* Input and Select Styles */
     input[type="number"], input[type="text"], select{
@@ -258,50 +262,52 @@
 	
 /*SLIDER STYLES*/
     
-    .hue-slider-container {
+    /* Custom circular hue slider */
+    .hue-slider-track {
       position: relative;
       width: 100%;
-      margin: 10px 0;
-    }
-    
-    .hue-slider {
-      -webkit-appearance: none;
-      width: 100%;
-      height: 12px;
-      border-radius: 6px;
-      background: linear-gradient(to right,
-        hsl(0, 100%, 50%),
-        hsl(60, 100%, 50%),
-        hsl(120, 100%, 50%),
-        hsl(180, 100%, 50%),
-        hsl(240, 100%, 50%),
-        hsl(300, 100%, 50%),
-        hsl(360, 100%, 50%));
-      outline: none;
-      box-shadow: inset 0 1px 3px rgba(0,0,0,0.4);
+      height: 22px;
+      border-radius: 11px;
+      overflow: hidden;
+      cursor: ew-resize;
+      box-shadow: inset 0 1px 3px rgba(0,0,0,0.5);
       margin-bottom: 15px;
+      user-select: none;
+      touch-action: none;
     }
-    
-    .hue-slider::-webkit-slider-thumb {
-      -webkit-appearance: none;
-      appearance: none;
+
+    .hue-slider-gradient {
+      position: absolute;
+      top: 0;
+      /* 3× wide so we can shift left/right ±1 full copy without showing edges */
+      left: -100%;
+      width: 300%;
+      height: 100%;
+      background: linear-gradient(to right,
+        hsl(0,100%,50%), hsl(60,100%,50%), hsl(120,100%,50%),
+        hsl(180,100%,50%), hsl(240,100%,50%), hsl(300,100%,50%),
+        hsl(360,100%,50%), hsl(60,100%,50%), hsl(120,100%,50%),
+        hsl(180,100%,50%), hsl(240,100%,50%), hsl(300,100%,50%),
+        hsl(360,100%,50%), hsl(60,100%,50%), hsl(120,100%,50%),
+        hsl(180,100%,50%), hsl(240,100%,50%), hsl(300,100%,50%),
+        hsl(360,100%,50%));
+      pointer-events: none;
+      /* translateX is set by JS; starts at 0 so hue=180 (center of gradient) shows */
+      will-change: transform;
+    }
+
+    .hue-slider-thumb {
+      position: absolute;
+      top: 50%;
+      left: 50%;
       width: 22px;
       height: 22px;
       border-radius: 50%;
-      background: #cccac6;
-      border: 2px solid #303030;
-      cursor: pointer;
-      box-shadow: 0 2px 5px rgba(0,0,0,0.5);
-    }
-    
-    .hue-slider::-moz-range-thumb {
-      width: 22px;
-      height: 22px;
-      border-radius: 50%;
-      background: #cccac6;
-      border: 2px solid #303030;
-      cursor: pointer;
-      box-shadow: 0 2px 5px rgba(0,0,0,0.5);
+      transform: translate(-50%, -50%);
+      border: 3px solid #303030;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.6);
+      pointer-events: none;
+      /* background-color set by JS */
     }
 
 
@@ -478,10 +484,13 @@
     </div>
 
     <div class="control-panel">
-      <div class="color-preview" id="anchorPreview"></div>
+      <canvas class="color-preview" id="anchorPreview" width="180" height="180"></canvas>
       <div class="input-group" style="width: 90%;">
         <label for="anchorHue">Anchor Hue (0-360°):</label>
-        <input type="range" id="hueSlider" class="hue-slider" min="0" max="360" value="180">
+        <div id="hueSlider" class="hue-slider-track" role="slider" aria-valuemin="0" aria-valuemax="360" aria-valuenow="180">
+          <div class="hue-slider-gradient" id="hueSliderGradient"></div>
+          <div class="hue-slider-thumb" id="hueSliderThumb"></div>
+        </div>
         <input type="number" id="anchorHue" min="0" max="360" value="180" step="1">
       </div>
       <div class="checkbox-group">
