@@ -467,6 +467,15 @@
           <option value="binomial">Binomial (M * Δh^P + A)</option>
         </select>
       </div>
+      <div class="input-group">
+        <label for="processingBackend">Processing Backend:</label>
+        <select id="processingBackend">
+          <option value="auto">Auto (Prefer GPU)</option>
+          <option value="gpu">GPU (WebGL)</option>
+          <option value="cpu">CPU (JavaScript)</option>
+        </select>
+        <small id="backendStatus" style="margin-top: 6px; color: #8cb4d8;">Backend: Auto</small>
+      </div>
       
       <div id="basicControls" style="width: 100%;">
         <div class="dynamic-slider-group" data-param="factor">
