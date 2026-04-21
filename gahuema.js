@@ -4,6 +4,7 @@ let originalImageData = null;
 let debounceTimer = null;
 let anchorS = 100; // saturation for preview crosshair / slider thumb color
 let anchorL = 50;  // lightness for preview crosshair / slider thumb color
+let gpuRenderer = null;
 
 // ─── Element refs ─────────────────────────────────────────────────────────────
 
@@ -12,6 +13,8 @@ const anchorHueInput    = document.getElementById('anchorHue');
 const anchorPreview     = document.getElementById('anchorPreview');
 const factorInput       = document.getElementById('factor');
 const transformSelect   = document.getElementById('transformType');
+const processingBackend = document.getElementById('processingBackend');
+const backendStatus     = document.getElementById('backendStatus');
 const saveBtn           = document.getElementById('saveBtn');
 const originalPixelInfo = document.getElementById('originalPixelInfo');
 const modifiedPixelInfo = document.getElementById('modifiedPixelInfo');
@@ -163,7 +166,7 @@ const transforms = {
 
 // ─── Updated processImage loop ───────────────────────────────────────────────
 
-function processImage() {
+function processImageCPU() {
   if (!originalImageData) return;
 
   const params = getParams();
@@ -192,6 +195,285 @@ function processImage() {
   }
 
   ctx.putImageData(imageData, 0, 0);
+}
+
+function setBackendStatus(message, isFallback = false) {
+  if (!backendStatus) return;
+  backendStatus.textContent = message;
+  backendStatus.style.color = isFallback ? '#f0b56a' : '#8cb4d8';
+}
+
+function shouldUseGpu() {
+  const choice = processingBackend?.value || 'auto';
+  if (choice === 'cpu') return false;
+  if (choice === 'gpu') return true;
+  return true; // auto prefers GPU
+}
+
+function processImage() {
+  if (!originalImageData) return;
+
+  if (shouldUseGpu()) {
+    const succeeded = processImageGPU();
+    if (succeeded) {
+      setBackendStatus('Backend: GPU (WebGL)');
+      return;
+    }
+    const forcedGpu = (processingBackend?.value === 'gpu');
+    setBackendStatus(
+      forcedGpu
+        ? 'Backend: GPU unavailable, using CPU fallback'
+        : 'Backend: Auto fallback to CPU',
+      true
+    );
+  } else {
+    setBackendStatus('Backend: CPU (JavaScript)');
+  }
+
+  processImageCPU();
+}
+
+function createGpuRenderer(width, height) {
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+
+  const gl =
+    canvas.getContext('webgl2', { premultipliedAlpha: false }) ||
+    canvas.getContext('webgl', { premultipliedAlpha: false });
+
+  if (!gl) return null;
+
+  const vertexSrc = `
+    attribute vec2 a_pos;
+    varying vec2 v_uv;
+    void main() {
+      v_uv = (a_pos + 1.0) * 0.5;
+      gl_Position = vec4(a_pos, 0.0, 1.0);
+    }
+  `;
+
+  const fragmentSrc = `
+    precision highp float;
+    varying vec2 v_uv;
+    uniform sampler2D u_image;
+    uniform float u_anchorHue;
+    uniform float u_factor;
+    uniform float u_m;
+    uniform float u_p;
+    uniform float u_a;
+    uniform int u_mode;
+    uniform int u_preventCrossing;
+
+    vec3 rgb2hsl(vec3 c) {
+      float maxc = max(c.r, max(c.g, c.b));
+      float minc = min(c.r, min(c.g, c.b));
+      float h = 0.0;
+      float s = 0.0;
+      float l = (maxc + minc) * 0.5;
+
+      if (maxc != minc) {
+        float d = maxc - minc;
+        s = l > 0.5 ? d / (2.0 - maxc - minc) : d / (maxc + minc);
+
+        if (maxc == c.r) {
+          h = (c.g - c.b) / d + (c.g < c.b ? 6.0 : 0.0);
+        } else if (maxc == c.g) {
+          h = (c.b - c.r) / d + 2.0;
+        } else {
+          h = (c.r - c.g) / d + 4.0;
+        }
+        h /= 6.0;
+      }
+      return vec3(h * 360.0, s * 100.0, l * 100.0);
+    }
+
+    float hue2rgb(float p, float q, float t) {
+      if (t < 0.0) t += 1.0;
+      if (t > 1.0) t -= 1.0;
+      if (t < 1.0/6.0) return p + (q - p) * 6.0 * t;
+      if (t < 1.0/2.0) return q;
+      if (t < 2.0/3.0) return p + (q - p) * (2.0/3.0 - t) * 6.0;
+      return p;
+    }
+
+    vec3 hsl2rgb(vec3 hsl) {
+      float h = hsl.x / 360.0;
+      float s = hsl.y / 100.0;
+      float l = hsl.z / 100.0;
+      float r, g, b;
+
+      if (s == 0.0) {
+        r = g = b = l;
+      } else {
+        float q = l < 0.5 ? l * (1.0 + s) : l + s - l * s;
+        float p = 2.0 * l - q;
+        r = hue2rgb(p, q, h + 1.0/3.0);
+        g = hue2rgb(p, q, h);
+        b = hue2rgb(p, q, h - 1.0/3.0);
+      }
+      return vec3(r, g, b);
+    }
+
+    float normalizeAngle(float angle) {
+      return mod(mod(angle, 360.0) + 360.0, 360.0);
+    }
+
+    void main() {
+      vec4 source = texture2D(u_image, v_uv);
+      vec3 hsl = rgb2hsl(source.rgb);
+      float hueDiff = hsl.x - u_anchorHue;
+      if (hueDiff > 180.0) hueDiff -= 360.0;
+      if (hueDiff < -180.0) hueDiff += 360.0;
+
+      float transformedHueDiff = hueDiff;
+      float signValue = sign(hueDiff);
+
+      if (hueDiff == 0.0) {
+        transformedHueDiff = 0.0;
+      } else if (u_mode == 0) {
+        transformedHueDiff = hueDiff + (signValue * u_factor);
+      } else if (u_mode == 1) {
+        transformedHueDiff = hueDiff * u_factor;
+      } else {
+        float pHueDiff = signValue * pow(abs(hueDiff), u_p);
+        float mHueDiff = u_m * pHueDiff;
+        transformedHueDiff = mHueDiff + (signValue * u_a);
+      }
+
+      if (u_preventCrossing == 1) {
+        if (sign(transformedHueDiff) != signValue && signValue != 0.0) {
+          transformedHueDiff = 0.0;
+        } else if (abs(transformedHueDiff) > 180.0) {
+          transformedHueDiff = 180.0 * signValue;
+        }
+      }
+
+      float newHue = normalizeAngle(u_anchorHue + transformedHueDiff);
+      vec3 rgb = hsl2rgb(vec3(newHue, hsl.y, hsl.z));
+      gl_FragColor = vec4(rgb, source.a);
+    }
+  `;
+
+  const compileShader = (type, source) => {
+    const shader = gl.createShader(type);
+    gl.shaderSource(shader, source);
+    gl.compileShader(shader);
+    if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+      gl.deleteShader(shader);
+      return null;
+    }
+    return shader;
+  };
+
+  const vertexShader = compileShader(gl.VERTEX_SHADER, vertexSrc);
+  const fragmentShader = compileShader(gl.FRAGMENT_SHADER, fragmentSrc);
+  if (!vertexShader || !fragmentShader) return null;
+
+  const program = gl.createProgram();
+  gl.attachShader(program, vertexShader);
+  gl.attachShader(program, fragmentShader);
+  gl.linkProgram(program);
+  if (!gl.getProgramParameter(program, gl.LINK_STATUS)) return null;
+
+  const positionBuffer = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+  gl.bufferData(
+    gl.ARRAY_BUFFER,
+    new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]),
+    gl.STATIC_DRAW
+  );
+
+  const texture = gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_2D, texture);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+
+  return {
+    canvas,
+    gl,
+    program,
+    texture,
+    positionBuffer,
+    positionLocation: gl.getAttribLocation(program, 'a_pos'),
+    uniformLocations: {
+      image: gl.getUniformLocation(program, 'u_image'),
+      anchorHue: gl.getUniformLocation(program, 'u_anchorHue'),
+      factor: gl.getUniformLocation(program, 'u_factor'),
+      m: gl.getUniformLocation(program, 'u_m'),
+      p: gl.getUniformLocation(program, 'u_p'),
+      a: gl.getUniformLocation(program, 'u_a'),
+      mode: gl.getUniformLocation(program, 'u_mode'),
+      preventCrossing: gl.getUniformLocation(program, 'u_preventCrossing'),
+    },
+  };
+}
+
+function processImageGPU() {
+  if (!originalImageData) return false;
+
+  const width = originalImageData.width;
+  const height = originalImageData.height;
+  if (!gpuRenderer || gpuRenderer.canvas.width !== width || gpuRenderer.canvas.height !== height) {
+    gpuRenderer = createGpuRenderer(width, height);
+    if (!gpuRenderer) return false;
+  }
+
+  const { gl, program, texture, positionBuffer, positionLocation, uniformLocations } = gpuRenderer;
+  const modeMap = { add: 0, multiply: 1, binomial: 2 };
+  const params = getParams();
+
+  gl.viewport(0, 0, width, height);
+  gl.useProgram(program);
+
+  gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+  gl.enableVertexAttribArray(positionLocation);
+  gl.vertexAttribPointer(positionLocation, 2, gl.FLOAT, false, 0, 0);
+
+  gl.activeTexture(gl.TEXTURE0);
+  gl.bindTexture(gl.TEXTURE_2D, texture);
+  gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+  gl.texImage2D(
+    gl.TEXTURE_2D,
+    0,
+    gl.RGBA,
+    width,
+    height,
+    0,
+    gl.RGBA,
+    gl.UNSIGNED_BYTE,
+    originalImageData.data
+  );
+
+  gl.uniform1i(uniformLocations.image, 0);
+  gl.uniform1f(uniformLocations.anchorHue, params.anchorHue);
+  gl.uniform1f(uniformLocations.factor, params.factor);
+  gl.uniform1f(uniformLocations.m, params.m);
+  gl.uniform1f(uniformLocations.p, params.p);
+  gl.uniform1f(uniformLocations.a, params.a);
+  gl.uniform1i(uniformLocations.mode, modeMap[params.mode] ?? 0);
+  gl.uniform1i(uniformLocations.preventCrossing, params.preventCrossing ? 1 : 0);
+
+  gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+
+  const out = new Uint8Array(width * height * 4);
+  gl.readPixels(0, 0, width, height, gl.RGBA, gl.UNSIGNED_BYTE, out);
+
+  const flipped = new Uint8ClampedArray(out.length);
+  const rowSize = width * 4;
+  for (let y = 0; y < height; y++) {
+    const src = y * rowSize;
+    const dst = (height - 1 - y) * rowSize;
+    flipped.set(out.subarray(src, src + rowSize), dst);
+  }
+
+  modifiedCanvas.width = width;
+  modifiedCanvas.height = height;
+  const ctx = modifiedCanvas.getContext('2d');
+  ctx.putImageData(new ImageData(flipped, width, height), 0, 0);
+  return true;
 }
 
 // ─── Read current params from UI ─────────────────────────────────────────────
@@ -316,6 +598,15 @@ transformSelect.addEventListener('change', () => {
   updateControlVisibility();
   if (originalImageData) scheduleProcess();
 });
+
+if (processingBackend) {
+  processingBackend.addEventListener('change', () => {
+    if (originalImageData) scheduleProcess();
+    else if (processingBackend.value === 'gpu') setBackendStatus('Backend: GPU requested');
+    else if (processingBackend.value === 'cpu') setBackendStatus('Backend: CPU selected');
+    else setBackendStatus('Backend: Auto (prefer GPU)');
+  });
+}
 
 updateControlVisibility();
 
@@ -635,3 +926,4 @@ if (uploadBtn) {
 }
 
 initDynamicSliders();
+setBackendStatus('Backend: Auto (prefer GPU)');
