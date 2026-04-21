@@ -181,12 +181,11 @@ figcaption {
         <section class="content-section">
 <h2>Transformation Modes</h2>
 
-<h3>Add</h3>
+<h3>Add & Multiply</h3>
 <p>
 Add shifts each hue relative to the anchor point by a fixed number of degrees. Positive values push hues farther away from the anchor point, while negative values pull hues toward it.
 </p>
 
-<h3>Multiply</h3>
 <p>
 Multiply scales the shortest hue distance between a hue and the anchor point. For example, if a hue is 20° clockwise from the anchor point, a factor of 2 moves it 40° clockwise from the anchor point. Values greater than 1 push hues farther away, while fractional values such as 0.5 pull them closer to the anchor point.
 </p>
@@ -221,9 +220,11 @@ Here, Δh is the signed shortest hue distance from the anchor point, M is the mu
 <p>
 If <code>P = 1</code>, the transformation behaves like a standard add/multiply operation. If <code>M = 1</code> and <code>A = 0</code>, there is no change.
 </p>
-<p>
-The power changes how strongly hues respond based on their distance from the anchor point. For example, if a hue is 10° from the anchor point and <code>P = 2</code>, that distance becomes 100° before the multiplier and offset are applied. This makes farther movement much more dramatic. If <code>P &lt; 1</code>, distances are compressed instead, which can pull hues into a tighter band around the anchor point.
-</p>
+
+
+<h3>Notes on Transformations</h3>
+<p> <strong>Add</strong> shifts all hues by a constant angular offset relative to the anchor point. The hue wheel is effectively split at the anchor into two regions, which rotate without changing their internal spacing. Distances between colors are preserved, so the overall color relationships remain intact. With crossing allowed, adding multiples of ±360° produces an identical image. </p> <p> <strong>Multiply</strong> rescales the distance of each hue from the anchor point. This expands or compresses the spacing between colors, altering their relative relationships. Values greater than 1 push hues outward (increasing contrast), while values between 0 and 1 pull them inward (reducing contrast). </p> <p> <strong>Power</strong> introduces nonlinearity by making the transformation depend on distance from the anchor. Values greater than 1 exaggerate differences. Nearby hues stay close, while distant hues move much farther away. Values between 0 and 1 compress differences, drawing hues into a tighter band around the anchor. Negative values make distant hues move more while closer hues move less. </p>
+
 
         </section>
 
