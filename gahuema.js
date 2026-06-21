@@ -1,12 +1,17 @@
-// ─── State ────────────────────────────────────────────────────────────────────
-let originalImageData = null;
-let debounceTimer = null;
-let anchorS = 100; 
-let anchorL = 50;  
+// ─── State ──────────────────────────────────────────────────────────────────
+let originalImageData = null;   // ImageData for still-image mode
+let isVideo           = false;  // current media kind
+let debounceTimer     = null;
+let rafId             = null;
+let anchorS = 100;
+let anchorL = 50;
 let gpuRenderer = null;
+let recording = false;
+let mediaRecorder = null;
 
 // ─── Element refs ─────────────────────────────────────────────────────────────
 const imageInput        = document.getElementById('imageInput');
+const sourceVideo       = document.getElementById('sourceVideo');
 const anchorHueInput    = document.getElementById('anchorHue');
 const anchorPreview     = document.getElementById('anchorPreview');
 const factorInput       = document.getElementById('factor');
@@ -14,25 +19,34 @@ const transformSelect   = document.getElementById('transformType');
 const processingBackend = document.getElementById('processingBackend');
 const backendStatus     = document.getElementById('backendStatus');
 const saveBtn           = document.getElementById('saveBtn');
+const extLabel          = document.getElementById('extLabel');
+const exportStatus      = document.getElementById('exportStatus');
 const originalPixelInfo = document.getElementById('originalPixelInfo');
 const modifiedPixelInfo = document.getElementById('modifiedPixelInfo');
 const dropPrompt        = document.getElementById('dropPrompt');
 const workspace         = document.getElementById('workspace');
 const dropZone          = document.getElementById('dropZone');
-const originalCanvas    = document.getElementById('originalCanvas');
-const modifiedCanvas    = document.getElementById('modifiedCanvas');
+const originalCanvas     = document.getElementById('originalCanvas');
+const modifiedCanvas     = document.getElementById('modifiedCanvas');
+
+// video transport
+const videoControls = document.getElementById('videoControls');
+const playPauseBtn  = document.getElementById('playPauseBtn');
+const seekBar       = document.getElementById('seekBar');
+const timeLabel     = document.getElementById('timeLabel');
+const loopBtn       = document.getElementById('loopBtn');
+
+let _origCtx = null, _modCtx = null;
+function origCtx(){ return _origCtx || (_origCtx = originalCanvas.getContext('2d', { willReadFrequently:true })); }
+function modCtx(){ return _modCtx || (_modCtx = modifiedCanvas.getContext('2d', { willReadFrequently:true })); }
 
 // ─── Color math ───────────────────────────────────────────────────────────────
-
 function rgbToHsl(r, g, b) {
   r /= 255; g /= 255; b /= 255;
-  const max = Math.max(r, g, b);
-  const min = Math.min(r, g, b);
-  let h, s;
-  const l = (max + min) / 2;
-  if (max === min) {
-    h = s = 0;
-  } else {
+  const max = Math.max(r, g, b), min = Math.min(r, g, b);
+  let h, s; const l = (max + min) / 2;
+  if (max === min) { h = s = 0; }
+  else {
     const d = max - min;
     s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
     switch (max) {
@@ -48,12 +62,10 @@ function rgbToHsl(r, g, b) {
 function hslToRgb(h, s, l) {
   h /= 360; s /= 100; l /= 100;
   let r, g, b;
-  if (s === 0) {
-    r = g = b = l;
-  } else {
+  if (s === 0) { r = g = b = l; }
+  else {
     const hue2rgb = (p, q, t) => {
-      if (t < 0) t += 1;
-      if (t > 1) t -= 1;
+      if (t < 0) t += 1; if (t > 1) t -= 1;
       if (t < 1/6) return p + (q - p) * 6 * t;
       if (t < 1/2) return q;
       if (t < 2/3) return p + (q - p) * (2/3 - t) * 6;
@@ -61,9 +73,7 @@ function hslToRgb(h, s, l) {
     };
     const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
     const p = 2 * l - q;
-    r = hue2rgb(p, q, h + 1/3);
-    g = hue2rgb(p, q, h);
-    b = hue2rgb(p, q, h - 1/3);
+    r = hue2rgb(p, q, h + 1/3); g = hue2rgb(p, q, h); b = hue2rgb(p, q, h - 1/3);
   }
   return [Math.round(r * 255), Math.round(g * 255), Math.round(b * 255)];
 }
@@ -101,13 +111,9 @@ function oklchToRgb(L, C, H) {
   ];
 }
 
-function normalizeAngle(angle) {
-  angle = angle % 360;
-  return angle < 0 ? angle + 360 : angle;
-}
+function normalizeAngle(angle) { angle = angle % 360; return angle < 0 ? angle + 360 : angle; }
 
-// ─── Refactored Transform Engine ──────────────────────────────────────────────
-
+// ─── Transform engine (CPU) ────────────────────────────────────────────────────
 const transforms = {
   execute(pixelHue, anchorHue, params) {
     const { mode, factor, m, p, a, preventCrossing } = params;
@@ -117,14 +123,9 @@ const transforms = {
     if (hueDiff === 0) return anchorHue;
     const sign = Math.sign(hueDiff);
     let transformedHueDiff;
-    if (mode === 'add') {
-      transformedHueDiff = hueDiff + (sign * factor);
-    } else if (mode === 'multiply') {
-      transformedHueDiff = hueDiff * factor;
-    } else {
-      let pHueDiff = sign * Math.pow(Math.abs(hueDiff), p);
-      transformedHueDiff = (m * pHueDiff) + (sign * a);
-    }
+    if (mode === 'add')        transformedHueDiff = hueDiff + (sign * factor);
+    else if (mode === 'multiply') transformedHueDiff = hueDiff * factor;
+    else { let pHueDiff = sign * Math.pow(Math.abs(hueDiff), p); transformedHueDiff = (m * pHueDiff) + (sign * a); }
     if (preventCrossing) {
       if (Math.sign(transformedHueDiff) !== sign) transformedHueDiff = 0;
       else if (Math.abs(transformedHueDiff) > 180) transformedHueDiff = 180 * sign;
@@ -133,49 +134,50 @@ const transforms = {
   }
 };
 
-// ─── Processing Logic ─────────────────────────────────────────────────────────
-
-function processImageCPU() {
-  if (!originalImageData) return;
+// ─── CPU processing ─────────────────────────────────────────────────────────────
+function transformImageDataCPU(src) {
   const params = getParams();
   const transform = transforms.execute;
-  modifiedCanvas.width  = originalImageData.width;
-  modifiedCanvas.height = originalImageData.height;
-  const ctx = modifiedCanvas.getContext('2d');
-  const imageData = new ImageData(new Uint8ClampedArray(originalImageData.data), originalImageData.width, originalImageData.height);
-  const data = imageData.data;
+  const out = new ImageData(new Uint8ClampedArray(src.data), src.width, src.height);
+  const data = out.data;
   for (let i = 0; i < data.length; i += 4) {
     let h, s_c, l_v;
     if (params.colorSpace === 'oklch') {
       [l_v, s_c, h] = rgbToOklch(data[i], data[i+1], data[i+2]);
-      const newHue = transform(h, params.anchorHue, params);
-      const [r, g, b] = oklchToRgb(l_v, s_c, newHue);
+      const [r, g, b] = oklchToRgb(l_v, s_c, transform(h, params.anchorHue, params));
       data[i] = r; data[i+1] = g; data[i+2] = b;
     } else {
       [h, s_c, l_v] = rgbToHsl(data[i], data[i+1], data[i+2]);
-      const newHue = transform(h, params.anchorHue, params);
-      const [r, g, b] = hslToRgb(newHue, s_c, l_v);
+      const [r, g, b] = hslToRgb(transform(h, params.anchorHue, params), s_c, l_v);
       data[i] = r; data[i+1] = g; data[i+2] = b;
     }
   }
-  ctx.putImageData(imageData, 0, 0);
+  return out;
 }
 
+function processImageCPU() {
+  if (!originalImageData) return;
+  sizeCanvas(modifiedCanvas, originalImageData.width, originalImageData.height);
+  modCtx().putImageData(transformImageDataCPU(originalImageData), 0, 0);
+}
+
+// ─── Still-image processing (image mode) ─────────────────────────────────────────
 function processImage() {
   if (!originalImageData) return;
-  if (shouldUseGpu()) {
-    const succeeded = processImageGPU();
-    if (succeeded) {
-      setBackendStatus('Backend: GPU (WebGL)');
-      return;
-    }
-    setBackendStatus('Backend: Auto fallback to CPU', true);
-  } else {
-    setBackendStatus('Backend: CPU (JavaScript)');
+  const w = originalImageData.width, h = originalImageData.height;
+  if (shouldUseGpu() && ensureRenderer(w, h)) {
+    drawWithRenderer(originalImageData, getParams(), w, h);
+    sizeCanvas(modifiedCanvas, w, h);
+    modCtx().drawImage(gpuRenderer.canvas, 0, 0, w, h);
+    setBackendStatus('Backend: GPU (WebGL)');
+    return;
   }
+  if (shouldUseGpu()) setBackendStatus('Backend: Auto fallback to CPU', true);
+  else setBackendStatus('Backend: CPU (JavaScript)');
   processImageCPU();
 }
 
+// ─── GPU renderer ────────────────────────────────────────────────────────────────
 function createGpuRenderer(width, height) {
   const canvas = document.createElement('canvas');
   canvas.width = width; canvas.height = height;
@@ -185,10 +187,7 @@ function createGpuRenderer(width, height) {
   const vertexSrc = `
     attribute vec2 a_pos;
     varying vec2 v_uv;
-    void main() {
-      v_uv = (a_pos + 1.0) * 0.5;
-      gl_Position = vec4(a_pos, 0.0, 1.0);
-    }
+    void main() { v_uv = (a_pos + 1.0) * 0.5; gl_Position = vec4(a_pos, 0.0, 1.0); }
   `;
 
   const fragmentSrc = `
@@ -211,7 +210,6 @@ function createGpuRenderer(width, height) {
       float b = 0.0259 * l_ + 0.7827 * m_ - 0.8087 * s_;
       return vec3(L, sqrt(a*a + b*b), mod(degrees(atan(b, a)) + 360.0, 360.0));
     }
-
     vec3 oklch2rgb(vec3 lch) {
       float H = radians(lch.z);
       float a = lch.y * cos(H), b = lch.y * sin(H);
@@ -222,7 +220,6 @@ function createGpuRenderer(width, height) {
       vec3 lo = 12.92 * rgb;
       return vec3(rgb.r > 0.00313 ? hi.r : lo.r, rgb.g > 0.00313 ? hi.g : lo.g, rgb.b > 0.00313 ? hi.b : lo.b);
     }
-
     vec3 rgb2hsl(vec3 c) {
       float maxc = max(c.r, max(c.g, c.b)), minc = min(c.r, min(c.g, c.b));
       float h = 0.0, s = 0.0, l = (maxc + minc) * 0.5;
@@ -236,7 +233,6 @@ function createGpuRenderer(width, height) {
       }
       return vec3(h * 360.0, s * 100.0, l * 100.0);
     }
-
     float hue2rgb(float p, float q, float t) {
       if (t < 0.0) t += 1.0; if (t > 1.0) t -= 1.0;
       if (t < 1.0/6.0) return p + (q - p) * 6.0 * t;
@@ -244,7 +240,6 @@ function createGpuRenderer(width, height) {
       if (t < 2.0/3.0) return p + (q - p) * (2.0/3.0 - t) * 6.0;
       return p;
     }
-
     vec3 hsl2rgb(vec3 hsl) {
       float h = hsl.x / 360.0, s = hsl.y / 100.0, l = hsl.z / 100.0;
       if (s == 0.0) return vec3(l);
@@ -252,7 +247,6 @@ function createGpuRenderer(width, height) {
       float p = 2.0 * l - q;
       return vec3(hue2rgb(p, q, h + 1.0/3.0), hue2rgb(p, q, h), hue2rgb(p, q, h - 1.0/3.0));
     }
-
     float applyGahuemaTransform(float currentHue) {
       float hueDiff = currentHue - u_anchorHue;
       if (hueDiff > 180.0) hueDiff -= 360.0; if (hueDiff < -180.0) hueDiff += 360.0;
@@ -267,17 +261,11 @@ function createGpuRenderer(width, height) {
       }
       return mod(mod(u_anchorHue + transformed, 360.0) + 360.0, 360.0);
     }
-
     void main() {
       vec4 src = texture2D(u_image, v_uv);
       vec3 res;
-      if (u_colorSpace == 1) {
-        vec3 lch = rgb2oklch(src.rgb);
-        res = oklch2rgb(vec3(lch.xy, applyGahuemaTransform(lch.z)));
-      } else {
-        vec3 hsl = rgb2hsl(src.rgb);
-        res = hsl2rgb(vec3(applyGahuemaTransform(hsl.x), hsl.yz));
-      }
+      if (u_colorSpace == 1) { vec3 lch = rgb2oklch(src.rgb); res = oklch2rgb(vec3(lch.xy, applyGahuemaTransform(lch.z))); }
+      else { vec3 hsl = rgb2hsl(src.rgb); res = hsl2rgb(vec3(applyGahuemaTransform(hsl.x), hsl.yz)); }
       gl_FragColor = vec4(res, src.a);
     }
   `;
@@ -297,8 +285,8 @@ function createGpuRenderer(width, height) {
   const texture = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, texture);
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
 
   return {
     canvas, gl, program, texture, positionBuffer,
@@ -315,25 +303,29 @@ function createGpuRenderer(width, height) {
   };
 }
 
-function processImageGPU() {
-  if (!originalImageData) return false;
-  const w = originalImageData.width, h = originalImageData.height;
+function ensureRenderer(w, h) {
   if (!gpuRenderer || gpuRenderer.canvas.width !== w || gpuRenderer.canvas.height !== h) {
     gpuRenderer = createGpuRenderer(w, h);
-    if (!gpuRenderer) return false;
   }
-  const { gl, program, texture, positionBuffer, positionLocation, uniformLocations } = gpuRenderer;
-  const params = getParams();
-  const modeMap = { add: 0, multiply: 1, binomial: 2 };
+  return !!gpuRenderer;
+}
 
+// Draw any source (ImageData | HTMLVideoElement | image/canvas) into gpuRenderer.canvas, upright.
+function drawWithRenderer(source, params, w, h) {
+  const { gl, program, texture, positionBuffer, positionLocation, uniformLocations } = gpuRenderer;
   gl.viewport(0, 0, w, h); gl.useProgram(program);
-  gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer); gl.enableVertexAttribArray(positionLocation);
+  gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+  gl.enableVertexAttribArray(positionLocation);
   gl.vertexAttribPointer(positionLocation, 2, gl.FLOAT, false, 0, 0);
 
   gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, texture);
   gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
-  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, originalImageData.data);
+  if (source instanceof ImageData)
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, source.data);
+  else
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, source);
 
+  const modeMap = { add: 0, multiply: 1, binomial: 2 };
   gl.uniform1i(uniformLocations.image, 0);
   gl.uniform1f(uniformLocations.anchorHue, params.anchorHue);
   gl.uniform1f(uniformLocations.factor, params.factor);
@@ -345,16 +337,6 @@ function processImageGPU() {
   gl.uniform1i(uniformLocations.colorSpace, params.colorSpace === 'oklch' ? 1 : 0);
 
   gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
-
-  const out = new Uint8Array(w * h * 4);
-  gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, out);
-  const flipped = new Uint8ClampedArray(out.length);
-  for (let y = 0; y < h; y++) {
-    flipped.set(out.subarray(y * w * 4, (y + 1) * w * 4), (h - 1 - y) * w * 4);
-  }
-  modifiedCanvas.width = w; modifiedCanvas.height = h;
-  modifiedCanvas.getContext('2d').putImageData(new ImageData(flipped, w, h), 0, 0);
-  return true;
 }
 
 function getParams() {
@@ -370,23 +352,92 @@ function getParams() {
   };
 }
 
-// ─── Initialization & UI Handlers ──────────────────────────────────────────────
+// ─── Video pipeline ─────────────────────────────────────────────────────────────
+function sizeCanvas(c, w, h) { if (c.width !== w || c.height !== h) { c.width = w; c.height = h; } }
 
+function drawVideoFrame() {
+  const w = sourceVideo.videoWidth, h = sourceVideo.videoHeight;
+  if (!w || !h) return;
+  sizeCanvas(originalCanvas, w, h);
+  sizeCanvas(modifiedCanvas, w, h);
+  origCtx().drawImage(sourceVideo, 0, 0, w, h);
+
+  if (shouldUseGpu() && ensureRenderer(w, h)) {
+    drawWithRenderer(sourceVideo, getParams(), w, h);
+    modCtx().drawImage(gpuRenderer.canvas, 0, 0, w, h);
+    setBackendStatus('Backend: GPU (WebGL)');
+  } else {
+    // CPU per-frame fallback (slow, but honest)
+    const frame = origCtx().getImageData(0, 0, w, h);
+    modCtx().putImageData(transformImageDataCPU(frame), 0, 0);
+    setBackendStatus(shouldUseGpu() ? 'Backend: Auto fallback to CPU' : 'Backend: CPU (JavaScript)', shouldUseGpu());
+  }
+}
+
+const hasRVFC = 'requestVideoFrameCallback' in HTMLVideoElement.prototype;
+function videoLoop() {
+  drawVideoFrame();
+  if (!sourceVideo.paused && !sourceVideo.ended) {
+    rafId = hasRVFC ? sourceVideo.requestVideoFrameCallback(videoLoop) : requestAnimationFrame(videoLoop);
+  }
+}
+function startVideoLoop() {
+  cancelVideoLoop();
+  rafId = hasRVFC ? sourceVideo.requestVideoFrameCallback(videoLoop) : requestAnimationFrame(videoLoop);
+}
+function cancelVideoLoop() {
+  if (rafId == null) return;
+  if (hasRVFC && sourceVideo.cancelVideoFrameCallback) sourceVideo.cancelVideoFrameCallback(rafId);
+  else cancelAnimationFrame(rafId);
+  rafId = null;
+}
+
+function fmtTime(t) {
+  if (!isFinite(t)) t = 0;
+  const m = Math.floor(t / 60), s = Math.floor(t % 60);
+  return `${m}:${s.toString().padStart(2, '0')}`;
+}
+
+sourceVideo.addEventListener('loadedmetadata', () => {
+  sizeCanvas(originalCanvas, sourceVideo.videoWidth, sourceVideo.videoHeight);
+  sizeCanvas(modifiedCanvas, sourceVideo.videoWidth, sourceVideo.videoHeight);
+  timeLabel.textContent = `0:00 / ${fmtTime(sourceVideo.duration)}`;
+  drawVideoFrame();
+});
+sourceVideo.addEventListener('play',  () => { playPauseBtn.textContent = '❚❚'; startVideoLoop(); });
+sourceVideo.addEventListener('pause', () => { playPauseBtn.textContent = '▶'; cancelVideoLoop(); drawVideoFrame(); });
+sourceVideo.addEventListener('seeked', () => { if (sourceVideo.paused) drawVideoFrame(); });
+sourceVideo.addEventListener('timeupdate', () => {
+  if (!recording && isFinite(sourceVideo.duration)) {
+    seekBar.value = (sourceVideo.currentTime / sourceVideo.duration) * 1000;
+  }
+  timeLabel.textContent = `${fmtTime(sourceVideo.currentTime)} / ${fmtTime(sourceVideo.duration)}`;
+  if (recording && isFinite(sourceVideo.duration)) {
+    exportStatus.textContent = `recording… ${Math.round((sourceVideo.currentTime / sourceVideo.duration) * 100)}%`;
+  }
+});
+
+playPauseBtn.addEventListener('click', () => { if (sourceVideo.paused) sourceVideo.play(); else sourceVideo.pause(); });
+loopBtn.addEventListener('click', () => { sourceVideo.loop = !sourceVideo.loop; loopBtn.classList.toggle('active', sourceVideo.loop); });
+seekBar.addEventListener('input', () => {
+  if (!isFinite(sourceVideo.duration)) return;
+  sourceVideo.currentTime = (seekBar.value / 1000) * sourceVideo.duration;
+});
+
+// ─── Param change routing ─────────────────────────────────────────────────────
+function scheduleProcess() { clearTimeout(debounceTimer); debounceTimer = setTimeout(processImage, 80); }
+function onParamsChanged() {
+  if (isVideo) { if (sourceVideo.paused) drawVideoFrame(); /* playing loop reads live */ }
+  else if (originalImageData) { scheduleProcess(); }
+}
+
+// ─── UI helpers ───────────────────────────────────────────────────────────────
 function setBackendStatus(message, isFallback = false) {
   if (!backendStatus) return;
   backendStatus.textContent = message;
-  backendStatus.style.color = isFallback ? '#f0b56a' : '#8cb4d8';
+  backendStatus.style.color = isFallback ? 'var(--warn)' : 'var(--specimen)';
 }
-
-function shouldUseGpu() {
-  const choice = processingBackend?.value || 'auto';
-  return choice !== 'cpu';
-}
-
-function scheduleProcess() {
-  clearTimeout(debounceTimer);
-  debounceTimer = setTimeout(processImage, 80);
-}
+function shouldUseGpu() { return (processingBackend?.value || 'auto') !== 'cpu'; }
 
 function initDynamicSliders() {
   document.querySelectorAll('.dynamic-slider-group').forEach(group => {
@@ -398,15 +449,15 @@ function initDynamicSliders() {
       if (v > max) { max = v; maxInput.value = max; }
       slider.min = min; slider.max = max; slider.value = v;
     };
-    valInput.addEventListener('input', () => { sync(); if (originalImageData) scheduleProcess(); });
-    slider.addEventListener('input', () => { valInput.value = slider.value; if (originalImageData) scheduleProcess(); });
+    valInput.addEventListener('input', () => { sync(); onParamsChanged(); });
+    slider.addEventListener('input', () => { valInput.value = slider.value; onParamsChanged(); });
     [minInput, maxInput].forEach(el => el.addEventListener('input', sync));
     sync();
   });
 }
 
 const basicControls = document.getElementById('basicControls'), binomialControls = document.getElementById('binomialControls');
-const factorLabel = document.getElementById('factorLabel'), factorLabels = { add: 'Shift Amount (°):', multiply: 'Scale Factor:' };
+const factorLabel = document.getElementById('factorLabel'), factorLabels = { add: 'Shift Amount (°)', multiply: 'Scale Factor' };
 
 function updateControlVisibility() {
   const m = transformSelect.value;
@@ -426,10 +477,7 @@ function updateAnchorPreview(hue) {
   const ctx = anchorPreview.getContext('2d'), w = anchorPreview.width, h = anchorPreview.height;
   for (let y = 0; y < h; y++) {
     const l = 100 - (y / h) * 100;
-    for (let x = 0; x < w; x++) {
-      ctx.fillStyle = `hsl(${hue}, ${(x / w) * 100}%, ${l}%)`;
-      ctx.fillRect(x, y, 1, 1);
-    }
+    for (let x = 0; x < w; x++) { ctx.fillStyle = `hsl(${hue}, ${(x / w) * 100}%, ${l}%)`; ctx.fillRect(x, y, 1, 1); }
   }
   const cx = (anchorS / 100) * w, cy = ((100 - anchorL) / 100) * h;
   ctx.strokeStyle = 'white'; ctx.lineWidth = 1.5; ctx.beginPath();
@@ -460,7 +508,7 @@ function updateAnchorPreview(hue) {
     h = normalizeAngle(h); grad.style.transform = `translateX(${-(h - 180) * (track.offsetWidth / 360)}px)`;
     thumb.style.backgroundColor = `hsl(${h}, ${anchorS}%, ${anchorL}%)`;
     anchorHueInput.value = Math.round(h); updateAnchorPreview(h);
-    if (originalImageData) scheduleProcess();
+    onParamsChanged();
   };
   track.addEventListener('pointerdown', (e) => { isDragging = true; dragStartX = e.clientX; dragStartHue = parseFloat(anchorHueInput.value); track.setPointerCapture(e.pointerId); });
   track.addEventListener('pointermove', (e) => { if (isDragging) apply(dragStartHue - (e.clientX - dragStartX) / (track.offsetWidth / 360)); });
@@ -469,15 +517,50 @@ function updateAnchorPreview(hue) {
   apply(180);
 })();
 
+// ─── Pixel inspection (finishes the readout panels) ─────────────────────────────
+function toHex(d) { return '#' + [d[0], d[1], d[2]].map(v => v.toString(16).padStart(2, '0')).join(''); }
+function readPixelInfo(canvas, ctx, evt, infoEl) {
+  if (!canvas.width) return;
+  const r = canvas.getBoundingClientRect();
+  const x = Math.floor((evt.clientX - r.left) * (canvas.width / r.width));
+  const y = Math.floor((evt.clientY - r.top) * (canvas.height / r.height));
+  if (x < 0 || y < 0 || x >= canvas.width || y >= canvas.height) return;
+  let d;
+  try { d = ctx.getImageData(x, y, 1, 1).data; } catch (e) { return; }
+  const [h, s, l] = rgbToHsl(d[0], d[1], d[2]);
+  const hex = toHex(d);
+  infoEl.innerHTML = `<span class="sw" style="background:${hex}"></span>${x},${y} · ${hex} · H ${Math.round(h)}° S ${Math.round(s)} L ${Math.round(l)}`;
+}
+originalCanvas.addEventListener('pointermove', (e) => readPixelInfo(originalCanvas, origCtx(), e, originalPixelInfo));
+modifiedCanvas.addEventListener('pointermove', (e) => readPixelInfo(modifiedCanvas, modCtx(), e, modifiedPixelInfo));
+originalCanvas.addEventListener('pointerleave', () => originalPixelInfo.textContent = 'hover to read pixel');
+modifiedCanvas.addEventListener('pointerleave', () => modifiedPixelInfo.textContent = 'hover to read pixel');
+
+// ─── Media loading & routing ─────────────────────────────────────────────────
+function revealWorkspace() {
+  dropPrompt.style.display = 'none';
+  workspace.style.display = 'block';
+  dropZone.classList.add('loaded');
+}
+
 function handleImageFile(file) {
+  isVideo = false;
+  cancelVideoLoop();
+  sourceVideo.pause();
+  videoControls.style.display = 'none';
+  saveBtn.textContent = 'Save charmed image';
+  extLabel.textContent = '.png';
+  exportStatus.textContent = '';
+
   const reader = new FileReader();
   reader.onload = (e) => {
     const img = new Image();
     img.onload = () => {
-      originalCanvas.width = modifiedCanvas.width = img.width; originalCanvas.height = modifiedCanvas.height = img.height;
-      const oCtx = originalCanvas.getContext('2d'); oCtx.drawImage(img, 0, 0);
-      originalImageData = oCtx.getImageData(0, 0, img.width, img.height);
-      dropPrompt.style.display = 'none'; workspace.style.display = 'block'; dropZone.classList.add('loaded');
+      sizeCanvas(originalCanvas, img.width, img.height);
+      sizeCanvas(modifiedCanvas, img.width, img.height);
+      origCtx().drawImage(img, 0, 0);
+      originalImageData = origCtx().getImageData(0, 0, img.width, img.height);
+      revealWorkspace();
       processImage();
     };
     img.src = e.target.result;
@@ -485,25 +568,119 @@ function handleImageFile(file) {
   reader.readAsDataURL(file);
 }
 
-// Reprocess when the Color Space is toggled
-document.getElementById('colorSpace').addEventListener('change', () => {
-  if (originalImageData) {
-    // We call processImage immediately for a snappier feel 
-    // when switching modes
-    processImage(); 
-  }
-});
+function handleVideoFile(file) {
+  isVideo = true;
+  originalImageData = null;
+  saveBtn.textContent = 'Export charmed video';
+  extLabel.textContent = '.webm';
+  exportStatus.textContent = '';
+  videoControls.style.display = 'flex';
+  loopBtn.classList.toggle('active', sourceVideo.loop);
 
-imageInput.addEventListener('change', (e) => { if (e.target.files[0]) handleImageFile(e.target.files[0]); });
+  if (sourceVideo.src) URL.revokeObjectURL(sourceVideo.src);
+  sourceVideo.src = URL.createObjectURL(file);
+  sourceVideo.load();
+  revealWorkspace();
+  playPauseBtn.textContent = '▶';
+}
+
+function handleFile(file) {
+  if (!file) return;
+  if (file.type.startsWith('video/')) handleVideoFile(file);
+  else if (file.type.startsWith('image/')) handleImageFile(file);
+}
+
+// ─── Export ────────────────────────────────────────────────────────────────────
+function savePng() {
+  const link = document.createElement('a');
+  link.download = `${document.getElementById('filenameInput')?.value || 'gahuema'}.png`;
+  link.href = modifiedCanvas.toDataURL();
+  link.click();
+}
+
+function pickVideoMime() {
+  const types = ['video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm;codecs=vp9', 'video/webm'];
+  for (const t of types) if (window.MediaRecorder && MediaRecorder.isTypeSupported(t)) return t;
+  return 'video/webm';
+}
+
+async function exportVideo() {
+  if (!isVideo) return;
+  if (!window.MediaRecorder) { exportStatus.textContent = 'this browser cannot record video'; return; }
+  if (recording) return;
+
+  // make sure a frame is rendered so captureStream has content
+  drawVideoFrame();
+
+  const fps = 30;
+  const stream = modifiedCanvas.captureStream(fps);
+  try {
+    const vstream = sourceVideo.captureStream ? sourceVideo.captureStream()
+                  : sourceVideo.mozCaptureStream ? sourceVideo.mozCaptureStream() : null;
+    if (vstream) vstream.getAudioTracks().forEach(t => stream.addTrack(t));
+  } catch (e) { /* audio optional */ }
+
+  const mime = pickVideoMime();
+  const chunks = [];
+  try { mediaRecorder = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 12_000_000 }); }
+  catch (e) { exportStatus.textContent = 'recorder failed to start'; return; }
+
+  mediaRecorder.ondataavailable = (e) => { if (e.data && e.data.size) chunks.push(e.data); };
+  mediaRecorder.onstop = () => {
+    const blob = new Blob(chunks, { type: 'video/webm' });
+    const link = document.createElement('a');
+    link.download = `${document.getElementById('filenameInput')?.value || 'gahuema'}.webm`;
+    link.href = URL.createObjectURL(blob);
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(link.href), 4000);
+    exportStatus.textContent = 'done — saved .webm';
+    setExportUI(false);
+  };
+
+  const prevLoop = sourceVideo.loop;
+  setExportUI(true);
+  recording = true;
+  sourceVideo.loop = false;
+  sourceVideo.pause();
+  sourceVideo.currentTime = 0;
+
+  const begin = () => {
+    sourceVideo.removeEventListener('seeked', begin);
+    startVideoLoop();
+    mediaRecorder.start();
+    sourceVideo.play();
+    const onEnd = () => {
+      sourceVideo.removeEventListener('ended', onEnd);
+      if (mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop();
+      recording = false;
+      sourceVideo.loop = prevLoop;
+    };
+    sourceVideo.addEventListener('ended', onEnd);
+  };
+  sourceVideo.addEventListener('seeked', begin);
+}
+
+function setExportUI(on) {
+  saveBtn.disabled = on;
+  playPauseBtn.disabled = on;
+  seekBar.disabled = on;
+  if (on) exportStatus.textContent = 'recording… 0%';
+}
+
+// ─── Wiring ────────────────────────────────────────────────────────────────────
+document.getElementById('colorSpace').addEventListener('change', () => { if (isVideo) drawVideoFrame(); else if (originalImageData) processImage(); });
+processingBackend.addEventListener('change', onParamsChanged);
+document.getElementById('preventCrossing').addEventListener('change', onParamsChanged);
+
+imageInput.addEventListener('change', (e) => handleFile(e.target.files[0]));
 dropPrompt.addEventListener('click', () => imageInput.click());
+document.getElementById('uploadBtn')?.addEventListener('click', () => imageInput.click());
+
 dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('drag-over'); });
 dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
-dropZone.addEventListener('drop', (e) => { e.preventDefault(); dropZone.classList.remove('drag-over'); const f = e.dataTransfer.files[0]; if (f && f.type.startsWith('image/')) handleImageFile(f); });
-saveBtn.addEventListener('click', () => {
-  const link = document.createElement('a'); link.download = `${document.getElementById('filenameInput')?.value || 'gahuema'}.png`;
-  link.href = modifiedCanvas.toDataURL(); link.click();
-});
-document.getElementById('uploadBtn')?.addEventListener('click', () => imageInput.click());
+dropZone.addEventListener('drop', (e) => { e.preventDefault(); dropZone.classList.remove('drag-over'); handleFile(e.dataTransfer.files[0]); });
+
+saveBtn.addEventListener('click', () => { if (isVideo) exportVideo(); else savePng(); });
 
 initDynamicSliders();
 updateControlVisibility();

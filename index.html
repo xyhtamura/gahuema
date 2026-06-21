@@ -1,573 +1,1229 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="icon" type="image/svg+xml" href="gahuema.svg">
 <title>GaHueMa</title>
-  <style>
-    @import url('https://fonts.googleapis.com/css2?family=Averia+Sans+Libre:wght@700&display=swap');
-    
-	
-/* UI STYLES */	
-	
-    body {
-      background-color: #303030;
-      color: #cccac6;
-      margin: 0;
-      padding: 0;
-    }
-   
-      .container {
-      max-width: 1100px; /* Widened for better side-by-side canvas display */
-      margin: 0 auto;
-      padding: 0 20px 40px 20px;
-      font-family: system-ui, sans-serif;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-    }
 
-   
-    .top-bar {
-      width: 100%;
-      padding: 15px 30px;
-      box-sizing: border-box;
-      display: flex;
-      justify-content: flex-end;
-    }
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Gloock&family=Grenze+Gotisch:wght@400;500;600&family=Silkscreen:wght@400;700&family=Spline+Sans+Mono:ital,wght@0,300..700;1,300..600&display=swap" rel="stylesheet">
 
-    .nav-link {
-      font-family: 'Averia Sans Libre', cursive;
-      font-size: 1.1em;
-      text-decoration: none;
-      color: #cccac6;
-      transition: color 0.3s ease;
-      background: linear-gradient(45deg, #ff9933, #33cc33);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      opacity: 0.8;
-    }
+<style>
+/* ──────────────────────────────────────────────────────────────────────────
+   GaHueMa skin: biomech CD-ROM / occult media-player / chromatic field station
+   JS-facing ids/classes are preserved; most changes are visual + structural.
+────────────────────────────────────────────────────────────────────────── */
+:root{
+  /* low-light, hue-bearing grounds */
+  --void:        #110713;
+  --ground:      #190917;
+  --ground-2:    #231025;
+  --ground-3:    #2d122b;
+  --panel:       #351832;
+  --panel-2:     #411b39;
+  --panel-3:     #25111f;
 
-    .nav-link:hover {
-      opacity: 1;
-      text-shadow: 0 0 8px rgba(51, 204, 51, 0.4);
-    }
+  /* carapace / conductive lines */
+  --ridge:       #6a3152;
+  --ridge-dim:   #43223b;
+  --line:        #7a3b63;
+  --line-soft:   #7a3b6338;
+  --deep-line:   #170912;
 
+  /* non-neutral ink */
+  --ink:         #f3d8df;
+  --ink-dim:     #c19cae;
+  --ink-faint:   #88677a;
+  --ink-bone:    #f5cfa8;
 
-    .title-container {
-      text-align: center;
-      margin-bottom: 30px;
-    }
+  /* gahuema accents */
+  --charm:       #ff3e9a;
+  --charm-hot:   #ff6a2d;
+  --charm-deep:  #b91567;
+  --bio:         #c8f24d;
+  --bio-dim:     #7ca72e;
+  --specimen:    #2bd1c3;
+  --specimen-2:  #6b8dff;
+  --violet:      #ad57ff;
+  --amber:       #f0a14a;
 
-    .title {
-      font-family: 'Averia Sans Libre', cursive;
-      font-size: 3.5em;
-      margin-bottom: 5px;
-      margin-top: 0;
-      background: linear-gradient(45deg, #ff0066, #ff9933, #33cc33, #3399ff);
-      -webkit-background-clip: text;
-      background-clip: text;
-      color: transparent;
-      text-shadow: 2px 2px 4px rgba(0,0,0,0.1);
-    }
-	
-
-    .subtitle {
-      font-family: 'Averia Sans Libre', cursive;
-      font-size: 1.2em;
-      background: linear-gradient(45deg, #4affbd, #ae21ff, #ff4ab1, #ff7d4a);
-      -webkit-background-clip: text;
-      background-clip: text;
-      color: transparent;
-      margin: 0 0 20px 0;
-      letter-spacing: 1px;
-    }
-
-/*WORKPLACE & DROP-ZONE*/	
-    
-
-    .workspace-zone {
-      border: 2px dashed #555;
-      border-radius: 12px;
-      width: 100%;
-      box-sizing: border-box;
-      background: #242424;
-      transition: border-color 0.3s ease, background-color 0.3s ease;
-      margin-top: 10px;
-      min-height: 200px;
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
-    }
-
-    .workspace-zone.loaded {
-      border: 2px dashed transparent;
-      background: transparent;
-      padding: 20px 0;
-    }
-
-    .workspace-zone.drag-over {
-      border-color: #3399ff !important;
-      background: #3a3a3a !important;
-    }
-
-    #dropPrompt {
-      padding: 60px 40px;
-      text-align: center;
-      cursor: pointer;
-      font-size: 1.1em;
-      color: #888;
-    }
-
-/*CANVAS & PIXEL DISPLAY*/
-
-.canvas-wrapper-flex {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 40px;
-  justify-content: center;
-  text-align: center;
-  width: 100%;
+  --radius: 18px;
+  --radius-tight: 10px;
+  --mono: 'Spline Sans Mono', ui-monospace, monospace;
+  --pixel: 'Silkscreen', 'Spline Sans Mono', ui-monospace, monospace;
+  --display: 'Gloock', Georgia, serif;
+  --gothic: 'Grenze Gotisch', Georgia, serif;
 }
 
+*{ box-sizing:border-box; }
+html,body{ margin:0; padding:0; }
+html{ min-height:100%; background:var(--void); }
 
-.canvas-wrapper-flex > div {
-  flex: 1 1 0;
-  min-width: 0;
-  max-width: 48%;
-}
-    .canvas-container {
-      position: relative;
-      display: inline-block;
-      background: #202020;
-      padding: 10px;
-      border-radius: 8px;
-      box-shadow: 0 4px 6px rgba(0,0,0,0.3);
-    }
-
-    h3 {
-      margin-top: 0;
-      color: #aaa;
-      font-weight: 500;
-    }
-
-canvas {
-  max-width: 100%;
-  max-height: 70vh;
-  height: auto;
-      border: 1px solid #404040;
-      box-sizing: border-box;
-      cursor: crosshair;
-      border-radius: 4px;
-    }
-
-    .pixel-info {
-      margin-top: 12px;
-      font-family: monospace;
-      background: #1a1a1a;
-      padding: 10px;
-      border-radius: 6px;
-      font-size: 14px;
-      color: #aaa;
-    }
-	
-/* UI & Input Styles*/
-
-    .controls {
-      width: 100%;
-      margin: 30px 0;
-      padding: 25px;
-      background: #242424;
-      border-radius: 12px;
-      box-shadow: 0 4px 15px rgba(0,0,0,0.2);
-      box-sizing: border-box;
-    }
-
-    .controls-grid {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 20px;
-      justify-content: center;
-      align-items: flex-start;
-    }
-
-    .control-panel {
-      background: #2a2a2a;
-      padding: 20px;
-      border-radius: 8px;
-      flex: 1 1 250px;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      box-shadow: inset 0 2px 4px rgba(0,0,0,0.1);
-    }
-
-    .input-group {
-      margin: 10px 0;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      width: 100%;
-    }
-
-    label {
-      display: block;
-      margin-bottom: 8px;
-      font-weight: 500;
-      color: #bbb;
-    }
-
-.color-preview {
-  width: 180px;
-  height: 180px;
-  border-radius: 4px;
-  margin: 0 auto 15px auto;
-  border: 2px solid #444;
-  box-shadow: 0 4px 10px rgba(0,0,0,0.4);
-  display: block;
-  cursor: crosshair;
-  touch-action: none;
+body{
+  min-height:100vh;
+  color:var(--ink);
+  font-family:var(--mono);
+  font-weight:350;
+  line-height:1.45;
+  position:relative;
+  overflow-x:hidden;
+  -webkit-font-smoothing:antialiased;
+  background:
+    radial-gradient(circle at 12% 16%, #6e174f55 0 10rem, transparent 24rem),
+    radial-gradient(circle at 80% 9%, #1f8f8950 0 7rem, transparent 23rem),
+    radial-gradient(circle at 72% 86%, #a6d84135 0 9rem, transparent 25rem),
+    radial-gradient(circle at 28% 92%, #8d42ff34 0 8rem, transparent 24rem),
+    linear-gradient(135deg, #120716 0%, #1e0b1b 42%, #100b17 100%);
 }
 
-    /* Input and Select Styles */
-    input[type="number"], input[type="text"], select{
-      background: #1a1a1a;
-      color: #cccac6;
-      border: 1px solid #444;
-      border-radius: 6px;
-      padding: 10px;
-      font-size: 15px;
-      width: 80%;
-      max-width: 200px;
-      text-align: center;
-      transition: background-color 0.2s ease, border-color 0.2s ease;
-    }
+/* page-wide scanline/grid overlay removed */
 
-    input[type="number"]:hover, select:hover {
-      background: #252525;
-      border-color: #666;
-    }
-
-    input[type="number"]:focus, select:focus {
-      background: #303030;
-      border-color: #3399ff;
-      outline: none;
-    }
-	
-	    .checkbox-group {
-      margin-top: 20px;
-      padding-top: 15px;
-      border-top: 1px solid #444;
-      width: 100%;
-      text-align: center;
-    }
-
-    .checkbox-group label {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 10px;
-      cursor: pointer;
-    }
-	
-/*SLIDER STYLES*/
-    
-    /* Custom circular hue slider */
-    .hue-slider-track {
-      position: relative;
-      width: 100%;
-      height: 22px;
-      border-radius: 11px;
-      overflow: hidden;
-      cursor: ew-resize;
-      box-shadow: inset 0 1px 3px rgba(0,0,0,0.5);
-      margin-bottom: 15px;
-      user-select: none;
-      touch-action: none;
-    }
-
-    .hue-slider-gradient {
-      position: absolute;
-      top: 0;
-      /* 3× wide so we can shift left/right ±1 full copy without showing edges */
-      left: -100%;
-      width: 300%;
-      height: 100%;
-      background: linear-gradient(to right,
-        hsl(0,100%,50%), hsl(60,100%,50%), hsl(120,100%,50%),
-        hsl(180,100%,50%), hsl(240,100%,50%), hsl(300,100%,50%),
-        hsl(360,100%,50%), hsl(60,100%,50%), hsl(120,100%,50%),
-        hsl(180,100%,50%), hsl(240,100%,50%), hsl(300,100%,50%),
-        hsl(360,100%,50%), hsl(60,100%,50%), hsl(120,100%,50%),
-        hsl(180,100%,50%), hsl(240,100%,50%), hsl(300,100%,50%),
-        hsl(360,100%,50%));
-      pointer-events: none;
-      /* translateX is set by JS; starts at 0 so hue=180 (center of gradient) shows */
-      will-change: transform;
-    }
-
-    .hue-slider-thumb {
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      width: 22px;
-      height: 22px;
-      border-radius: 50%;
-      transform: translate(-50%, -50%);
-      border: 3px solid #303030;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.6);
-      pointer-events: none;
-      /* background-color set by JS */
-    }
-
-
-	.slider-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  margin-bottom: 15px;
+body::after{
+  content:"";
+  position:fixed;
+  inset:0;
+  z-index:9999;
+  pointer-events:none;
+  opacity:.075;
+  mix-blend-mode:overlay;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.82' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  animation:grain .6s steps(2) infinite;
+}
+@keyframes grain{
+  0%{ transform:translate(0,0); }
+  50%{ transform:translate(-3px,2px); }
+  100%{ transform:translate(2px,-3px); }
 }
 
-.slider-row input[type="number"] {
-  width: 60px; /* Smaller for min/max */
-  padding: 5px;
-  font-size: 12px;
+.aura{
+  position:fixed;
+  inset:-22vmax;
+  z-index:-3;
+  pointer-events:none;
+  filter:blur(82px) saturate(1.35);
+  opacity:.54;
+}
+.aura span{ position:absolute; border-radius:50%; mix-blend-mode:screen; }
+.aura .a{
+  width:42vmax; height:42vmax; top:-4vmax; left:-5vmax;
+  background:radial-gradient(circle, var(--charm) 0%, transparent 62%);
+  animation:drift1 28s ease-in-out infinite;
+}
+.aura .b{
+  width:39vmax; height:39vmax; top:8vmax; right:-7vmax;
+  background:radial-gradient(circle, var(--specimen) 0%, transparent 62%);
+  animation:drift2 33s ease-in-out infinite;
+}
+.aura .c{
+  width:34vmax; height:34vmax; bottom:-7vmax; left:30vw;
+  background:radial-gradient(circle, var(--bio) 0%, transparent 60%);
+  animation:drift3 38s ease-in-out infinite;
+  opacity:.54;
+}
+@keyframes drift1{ 50%{ transform:translate(8vmax,6vmax) scale(1.14); } }
+@keyframes drift2{ 50%{ transform:translate(-7vmax,8vmax) scale(.88); } }
+@keyframes drift3{ 50%{ transform:translate(6vmax,-8vmax) scale(1.15); } }
+
+/* ─── LAYOUT ─────────────────────────────────────────────────────────── */
+.top-bar{
+  width:100%;
+  padding:18px clamp(16px, 4vw, 42px);
+  display:flex;
+  justify-content:flex-end;
+  position:relative;
+  z-index:4;
+}
+.nav-link{
+  position:relative;
+  display:inline-flex;
+  align-items:center;
+  gap:9px;
+  padding:9px 16px 9px 13px;
+  border:1px solid #8e436c75;
+  border-radius:999px;
+  background:
+    linear-gradient(180deg, #351832d9, #190b17d9),
+    radial-gradient(circle at 14% 10%, #ff3e9a24, transparent 52%);
+  color:var(--ink-dim);
+  font-family:var(--pixel);
+  font-size:.68rem;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  text-decoration:none;
+  box-shadow:inset 0 1px 0 #ffffff1c, 0 8px 22px #00000045;
+  transition:color .22s, border-color .22s, box-shadow .22s, transform .12s;
+}
+.nav-link::after{
+  content:"";
+  position:absolute;
+  inset:4px;
+  border-radius:999px;
+  border:1px solid #ffffff0b;
+  pointer-events:none;
+}
+.nav-link img{ width:18px; height:18px; filter:drop-shadow(0 0 6px #ff3e9a66); }
+.nav-link:hover{
+  color:var(--ink);
+  border-color:var(--specimen);
+  box-shadow:inset 0 1px 0 #ffffff22, 0 0 24px #2bd1c32b, 0 8px 22px #00000045;
+  transform:translateY(-1px);
 }
 
-.slider-row .val-input {
-  width: 80px;
-  font-size: 14px;
-  border-color: #3399ff;
+.container{
+  width:min(1240px, calc(100% - 48px));
+  margin:0 auto;
+  padding:0 0 72px;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  position:relative;
+  z-index:2;
 }
 
-.slider-row input[type="range"] {
-  flex-grow: 1;
-  cursor: pointer;
+/* ─── MASTHEAD ───────────────────────────────────────────────────────── */
+.masthead{
+  width:min(920px, 100%);
+  margin:2px 0 30px;
+  padding:18px clamp(16px, 4vw, 30px) 24px;
+  text-align:center;
+  position:relative;
+  border-radius:32px 32px 22px 22px;
+  border:1px solid var(--line-soft);
+  background:
+    radial-gradient(circle at 50% -10%, #ff3e9a30, transparent 42%),
+    radial-gradient(circle at 14% 55%, #2bd1c31d, transparent 45%),
+    linear-gradient(180deg, #2b1227d9 0%, #160913d9 100%);
+  box-shadow:
+    inset 0 1px 0 #ffffff18,
+    inset 0 -18px 42px #00000050,
+    0 22px 70px #00000055;
+  overflow:hidden;
+}
+.masthead::before{
+  content:"";
+  position:absolute;
+  inset:8px;
+  border-radius:26px 26px 16px 16px;
+  border:1px solid #e851a81c;
+  pointer-events:none;
+}
+.masthead::after{
+  content:"◜ ◝ ◟ ◞";
+  position:absolute;
+  left:50%;
+  bottom:7px;
+  transform:translateX(-50%);
+  font-family:var(--pixel);
+  font-size:.56rem;
+  letter-spacing:1.35em;
+  color:#c8f24d55;
+  text-shadow:0 0 10px #c8f24d33;
+  pointer-events:none;
+}
+.eyebrow{
+  margin:0 0 10px;
+  color:var(--ink-faint);
+  font-family:var(--pixel);
+  font-size:.65rem;
+  letter-spacing:.06em;
+  text-transform:uppercase;
+}
+.eyebrow b{
+  color:var(--specimen);
+  font-weight:400;
+  text-shadow:0 0 12px #2bd1c366;
+}
+.title{
+  margin:0;
+  font-family:var(--gothic);
+  font-weight:600;
+  font-size:clamp(4rem, 13vw, 8.2rem);
+  line-height:.76;
+  letter-spacing:.015em;
+  color:transparent;
+  -webkit-text-fill-color:transparent;
+  background:
+    linear-gradient(180deg, #ffe39b 0%, #ff6a2d 18%, #ff3e9a 39%, #7a5cff 58%, #2bd1c3 76%, #c8f24d 100%);
+  -webkit-background-clip:text;
+  background-clip:text;
+  filter:
+    drop-shadow(0 2px 0 #541535)
+    drop-shadow(0 5px 0 #180817)
+    drop-shadow(0 0 18px #ff3e9a55)
+    drop-shadow(0 0 28px #2bd1c328);
+  animation:titlePulse 5.5s ease-in-out infinite;
+}
+@keyframes titlePulse{
+  50%{ filter:drop-shadow(0 2px 0 #541535) drop-shadow(0 5px 0 #180817) drop-shadow(0 0 24px #ff3e9a75) drop-shadow(0 0 34px #2bd1c342); }
+}
+.subtitle{
+  margin:14px 0 18px;
+  color:var(--ink-dim);
+  font-family:var(--pixel);
+  font-size:.72rem;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+}
+.subtitle .dot{
+  display:inline-block;
+  margin:0 .75em;
+  color:var(--bio);
+  text-shadow:0 0 10px #c8f24d80;
 }
 
-.min-input, .max-input {
-  color: #888 !important;
-  background: #111 !important;
+/* ─── BUTTONS ────────────────────────────────────────────────────────── */
+.button{
+  position:relative;
+  cursor:pointer;
+  border:1px solid #8b426b99;
+  border-radius:999px;
+  padding:12px 23px;
+  background:
+    linear-gradient(180deg, #3a1936, #1b0b18),
+    radial-gradient(circle at 35% 0%, #ffffff16, transparent 48%);
+  color:var(--ink);
+  font-family:var(--pixel);
+  font-size:.72rem;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  box-shadow:
+    inset 0 1px 0 #ffffff24,
+    inset 0 -8px 18px #0000005c,
+    0 10px 28px #00000045;
+  transition:transform .1s, border-color .22s, box-shadow .22s, color .22s;
+}
+.button::before,
+.button::after{
+  content:"";
+  position:absolute;
+  top:50%;
+  transform:translateY(-50%);
+  width:7px;
+  height:7px;
+  border-radius:50%;
+  background:radial-gradient(circle at 30% 30%, #fff1c4, var(--bio) 42%, #243414 76%);
+  box-shadow:0 0 9px #c8f24d8c;
+}
+.button::before{ left:10px; }
+.button::after{ right:10px; background:radial-gradient(circle at 30% 30%, #ffd6ec, var(--charm) 42%, #43142b 78%); box-shadow:0 0 9px #ff3e9a8c; }
+.button:hover{
+  transform:translateY(-1px);
+  border-color:var(--specimen);
+  color:#fff1d2;
+  box-shadow:inset 0 1px 0 #ffffff26, inset 0 -8px 18px #0000005c, 0 0 26px #2bd1c32e, 0 10px 28px #00000045;
+}
+.button:active{ transform:translateY(1px) scale(.99); }
+.button:disabled{ opacity:.45; cursor:not-allowed; }
+.button.primary{
+  padding-inline:30px;
+  border-color:#ff80bd8a;
+  color:#220812;
+  font-weight:700;
+  background:
+    linear-gradient(180deg, #ffe77b 0%, #ff7c34 18%, #ff3e9a 50%, #ab40ff 100%);
+  text-shadow:0 1px 0 #ffffff38;
+}
+.button.primary:hover{ box-shadow:inset 0 1px 0 #ffffff55, inset 0 -10px 16px #5b0a3570, 0 0 30px #ff3e9a55, 0 0 18px #c8f24d33; }
+
+/* ─── WORKSPACE / DROP ───────────────────────────────────────────────── */
+.workspace-zone{
+  width:100%;
+  min-height:240px;
+  margin-top:8px;
+  padding:14px;
+  position:relative;
+  display:flex;
+  flex-direction:column;
+  justify-content:center;
+  border:1px solid #7a3b6380;
+  border-radius:30px;
+  background:
+    linear-gradient(180deg, #32142ee0, #170912e8),
+    radial-gradient(circle at 20% 0%, #2bd1c322, transparent 44%);
+  box-shadow:
+    inset 0 1px 0 #ffffff17,
+    inset 0 -24px 54px #00000062,
+    0 18px 60px #0000005a;
+  overflow:hidden;
+  transition:border-color .25s, background .25s, box-shadow .25s;
+}
+.workspace-zone::before{
+  content:"";
+  position:absolute;
+  inset:8px;
+  border-radius:24px;
+  border:1px solid #ffffff10;
+  pointer-events:none;
+  background:
+    linear-gradient(90deg, transparent 0 49%, #2bd1c31b 50%, transparent 51%),
+    linear-gradient(0deg, transparent 0 49%, #ff3e9a12 50%, transparent 51%);
+  mask:linear-gradient(#000, transparent 13%, transparent 87%, #000);
+  opacity:.72;
+}
+.workspace-zone::after{
+  content:"";
+  position:absolute;
+  right:-34px;
+  top:12%;
+  width:82px;
+  height:76%;
+  border-radius:60% 0 0 60%;
+  border:1px solid #8b426b66;
+  background:
+    linear-gradient(180deg, #3b1732, #170912),
+    radial-gradient(circle at 0 50%, #ff3e9a33, transparent 60%);
+  box-shadow:inset 14px 0 22px #00000055, 0 0 22px #ff3e9a1f;
+  opacity:.66;
+  pointer-events:none;
+}
+.workspace-zone.loaded{ border-color:#7a3b635a; background:transparent; padding:12px 0; overflow:visible; }
+.workspace-zone.loaded::before,
+.workspace-zone.loaded::after{ opacity:.28; }
+.workspace-zone.drag-over{
+  border-color:var(--specimen);
+  box-shadow:inset 0 1px 0 #ffffff17, inset 0 -24px 54px #00000062, 0 0 34px #2bd1c34b, 0 18px 60px #0000005a;
+}
+#dropPrompt{
+  margin:8px;
+  min-height:220px;
+  padding:56px clamp(20px, 6vw, 72px);
+  position:relative;
+  z-index:1;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  cursor:pointer;
+  text-align:center;
+  color:var(--ink-faint);
+  border-radius:22px;
+  border:1px solid #61314f85;
+  background:
+    radial-gradient(circle at 50% 50%, #345f4d40 0 18%, transparent 48%),
+    linear-gradient(180deg, #120914, #251026 52%, #100811);
+  box-shadow:inset 0 0 0 1px #ffffff0b, inset 0 0 54px #00000088;
+}
+#dropPrompt::before{
+  content:"";
+  position:absolute;
+  inset:16px;
+  border-radius:15px;
+  pointer-events:none;
+  border:1px dashed #2bd1c344;
+}
+#dropPrompt::after{
+  content:"✣  monitor  ✣";
+  position:absolute;
+  left:50%;
+  bottom:19px;
+  transform:translateX(-50%);
+  color:#c8f24d78;
+  font-family:var(--pixel);
+  font-size:.58rem;
+  letter-spacing:.08em;
+  white-space:nowrap;
+}
+#dropPrompt .big{
+  color:var(--ink-bone);
+  font-family:var(--gothic);
+  font-size:clamp(2.1rem, 7vw, 4rem);
+  line-height:.92;
+  text-shadow:0 0 18px #ff3e9a66, 0 3px 0 #120714;
+}
+#dropPrompt .small{
+  margin-top:12px;
+  color:var(--ink-dim);
+  font-family:var(--pixel);
+  font-size:.68rem;
+  letter-spacing:.06em;
+  text-transform:uppercase;
+}
+#dropPrompt .small b{ color:var(--specimen); font-weight:400; text-shadow:0 0 10px #2bd1c388; }
+
+/* ─── CANVASES ───────────────────────────────────────────────────────── */
+.canvas-wrapper-flex{
+  width:100%;
+  display:flex;
+  flex-wrap:wrap;
+  gap:24px;
+  justify-content:center;
+  position:relative;
+  z-index:1;
+}
+.canvas-wrapper-flex > div{
+  flex:1 1 0;
+  min-width:290px;
+  max-width:50%;
+  text-align:center;
+  position:relative;
+}
+.specimen-label{
+  width:max-content;
+  max-width:100%;
+  margin:0 auto 10px;
+  padding:6px 15px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:8px;
+  border:1px solid #6c345980;
+  border-radius:999px;
+  background:linear-gradient(180deg, #281225, #140a13);
+  color:var(--ink-faint);
+  font-family:var(--pixel);
+  font-size:.62rem;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  box-shadow:inset 0 1px 0 #ffffff14, 0 8px 18px #0000003f;
+}
+.specimen-label::before,
+.specimen-label::after{
+  content:"";
+  width:7px;
+  height:7px;
+  border-radius:50%;
+  background:var(--ridge);
+  box-shadow:0 0 8px #7a3b6390;
+}
+.canvas-wrapper-flex > div:last-child .specimen-label::before,
+.canvas-wrapper-flex > div:last-child .specimen-label::after{
+  background:var(--charm);
+  box-shadow:0 0 9px var(--charm);
+}
+.canvas-container{
+  position:relative;
+  padding:16px 16px 14px;
+  border:1px solid #7d3b6590;
+  border-radius:22px;
+  background:
+    linear-gradient(180deg, #3b1836, #170912 76%),
+    radial-gradient(circle at 50% 0%, #ffffff12, transparent 44%);
+  box-shadow:
+    inset 0 1px 0 #ffffff18,
+    inset 0 -20px 38px #00000070,
+    0 18px 42px #0000005a;
+}
+.canvas-container::before{
+  content:"";
+  position:absolute;
+  inset:6px;
+  border-radius:17px;
+  border:1px solid #ffffff0d;
+  pointer-events:none;
+}
+.canvas-container::after{
+  content:"";
+  position:absolute;
+  left:10px;
+  right:10px;
+  top:9px;
+  height:8px;
+  border-radius:999px;
+  background:linear-gradient(90deg, #ff3e9a80, #2bd1c380, transparent);
+  opacity:.34;
+  pointer-events:none;
+}
+canvas{
+  display:block;
+  max-width:100%;
+  max-height:62vh;
+  height:auto;
+  margin:0 auto;
+  border:1px solid #a4507780;
+  border-radius:12px;
+  background:#160916;
+  cursor:crosshair;
+  box-shadow:
+    inset 0 0 0 1px #ffffff0a,
+    0 0 0 1px #110713,
+    0 15px 32px #00000070,
+    0 0 24px #2bd1c31b;
+}
+.pixel-info{
+  min-height:35px;
+  margin-top:12px;
+  padding:8px 11px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  border:1px solid #5c2c4a90;
+  border-radius:12px;
+  background:
+    linear-gradient(180deg, #160916, #241020);
+  color:var(--ink-dim);
+  font-family:var(--mono);
+  font-size:.7rem;
+  letter-spacing:.035em;
+  box-shadow:inset 0 1px 0 #ffffff10;
+}
+.pixel-info .sw{
+  display:inline-block;
+  width:12px;
+  height:12px;
+  margin-right:8px;
+  border-radius:4px;
+  border:1px solid #fff2;
+  vertical-align:middle;
+  box-shadow:0 0 7px currentColor;
 }
 
+/* ─── VIDEO TRANSPORT ───────────────────────────────────────────────── */
+#videoControls{
+  width:min(780px, calc(100% - 20px));
+  margin:22px auto 0;
+  padding:8px 12px 8px 8px;
+  display:none;
+  align-items:center;
+  gap:12px;
+  border:1px solid #7a3b6390;
+  border-radius:999px;
+  background:
+    linear-gradient(180deg, #401a3a, #180a16),
+    radial-gradient(circle at 12% 0%, #ff3e9a2a, transparent 50%);
+  box-shadow:inset 0 1px 0 #ffffff20, inset 0 -10px 22px #00000066, 0 14px 30px #0000004d;
+}
+.transport-btn{
+  flex:0 0 auto;
+  width:42px;
+  height:42px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  border:1px solid #8b426b;
+  border-radius:50%;
+  background:radial-gradient(circle at 40% 28%, #55334b, #1b0c18 72%);
+  color:var(--ink);
+  cursor:pointer;
+  font-size:.92rem;
+  box-shadow:inset 0 1px 0 #ffffff26, 0 0 0 1px #110713, 0 8px 16px #0000004d;
+  transition:border-color .2s, color .2s, box-shadow .2s;
+}
+.transport-btn:hover{ border-color:var(--charm); color:var(--charm); box-shadow:inset 0 1px 0 #ffffff26, 0 0 16px #ff3e9a42; }
+.transport-btn.active{ color:var(--bio); border-color:var(--bio-dim); box-shadow:inset 0 1px 0 #ffffff22, 0 0 16px #c8f24d40; }
+#seekBar{ flex:1 1 auto; }
+#timeLabel{
+  flex:0 0 auto;
+  min-width:96px;
+  text-align:right;
+  color:var(--ink-dim);
+  font-family:var(--pixel);
+  font-size:.58rem;
+  letter-spacing:.05em;
+}
 
-/* BUTTONS */
-    .button-group {
-      display: flex;
-      gap: 15px;
-      justify-content: center;
-      margin-top: 20px;
-    }
+/* ─── RANGE SLIDERS ──────────────────────────────────────────────────── */
+input[type="range"]{
+  -webkit-appearance:none;
+  appearance:none;
+  height:8px;
+  border:1px solid #5f2d4f;
+  border-radius:999px;
+  outline:none;
+  cursor:pointer;
+  background:
+    linear-gradient(90deg, #ff3e9a88, #c8f24d9c, #2bd1c399);
+  box-shadow:inset 0 2px 4px #00000080, 0 0 12px #ff3e9a1a;
+}
+input[type="range"]::-webkit-slider-thumb{
+  -webkit-appearance:none;
+  width:20px;
+  height:20px;
+  border:3px solid #160916;
+  border-radius:50%;
+  background:radial-gradient(circle at 33% 30%, #fff3b0, var(--charm) 46%, #68103c 78%);
+  box-shadow:0 0 0 1px #ffd1e6aa, 0 0 13px #ff3e9a8a, 0 4px 10px #00000080;
+}
+input[type="range"]::-moz-range-thumb{
+  width:16px;
+  height:16px;
+  border:3px solid #160916;
+  border-radius:50%;
+  background:radial-gradient(circle at 33% 30%, #fff3b0, var(--charm) 46%, #68103c 78%);
+  box-shadow:0 0 0 1px #ffd1e6aa, 0 0 13px #ff3e9a8a, 0 4px 10px #00000080;
+}
 
-    .button {
-      background: #4a4a4a;
-      color: #fff;
-      border: none;
-      padding: 12px 24px;
-      border-radius: 6px;
-      font-size: 1em;
-      font-weight: bold;
-      cursor: pointer;
-      transition: background 0.2s ease, transform 0.1s ease;
-    }
+/* ─── CONTROLS ───────────────────────────────────────────────────────── */
+.controls{ width:100%; margin:26px 0 0; }
+.controls-grid{
+  width:100%;
+  display:grid;
+  grid-template-columns:minmax(320px, 1.25fr) minmax(300px, .85fr);
+  gap:22px;
+  align-items:stretch;
+}
+.control-panel{
+  position:relative;
+  min-width:0;
+  padding:24px clamp(16px, 3vw, 24px);
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  border:1px solid #7a3b6390;
+  border-radius:28px;
+  background:
+    radial-gradient(circle at 50% 0%, #ff3e9a24, transparent 40%),
+    linear-gradient(180deg, #371633 0%, #201020 52%, #130812 100%);
+  box-shadow:
+    inset 0 1px 0 #ffffff19,
+    inset 0 -22px 45px #0000006b,
+    0 18px 48px #00000055;
+  overflow:hidden;
+}
+.control-panel::before{
+  content:"";
+  position:absolute;
+  inset:8px;
+  border-radius:21px;
+  border:1px solid #ffffff10;
+  pointer-events:none;
+}
+.control-panel::after{
+  content:"";
+  position:absolute;
+  left:-18px;
+  bottom:-22px;
+  width:118px;
+  height:118px;
+  border-radius:50%;
+  background:
+    radial-gradient(circle, transparent 0 34%, #c8f24d33 35% 37%, transparent 38% 48%, #ff3e9a28 49% 51%, transparent 52%),
+    conic-gradient(from 90deg, #ff3e9a55, #2bd1c355, #c8f24d55, #ff3e9a55);
+  opacity:.22;
+  filter:blur(.2px);
+  pointer-events:none;
+}
+.panel-head{
+  width:100%;
+  margin:-2px 0 15px;
+  padding:0 0 11px;
+  border-bottom:1px solid #7a3b6345;
+  color:var(--ink-faint);
+  font-family:var(--pixel);
+  font-size:.6rem;
+  letter-spacing:.07em;
+  text-align:left;
+  text-transform:uppercase;
+}
+.panel-head b{
+  color:var(--specimen);
+  font-weight:400;
+  text-shadow:0 0 10px #2bd1c380;
+}
+.input-group{
+  width:100%;
+  margin:9px 0;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  position:relative;
+  z-index:1;
+}
+label{
+  display:block;
+  margin-bottom:8px;
+  color:var(--ink-dim);
+  font-family:var(--pixel);
+  font-size:.62rem;
+  letter-spacing:.06em;
+  text-transform:uppercase;
+}
+input[type="number"],
+input[type="text"],
+select{
+  width:80%;
+  max-width:235px;
+  padding:10px 12px;
+  border:1px solid #7a3b63a0;
+  border-radius:12px;
+  background:
+    linear-gradient(180deg, #120914, #241020),
+    radial-gradient(circle at 50% 0%, #ffffff12, transparent 42%);
+  color:var(--ink);
+  font-family:var(--mono);
+  font-size:.88rem;
+  text-align:center;
+  box-shadow:inset 0 1px 0 #ffffff12, inset 0 0 16px #00000056;
+  transition:border-color .2s, background .2s, box-shadow .2s;
+}
+input[type="number"]:hover,
+input[type="text"]:hover,
+select:hover{ border-color:#c19cae9c; }
+input[type="number"]:focus,
+input[type="text"]:focus,
+select:focus{
+  border-color:var(--charm);
+  outline:none;
+  box-shadow:inset 0 1px 0 #ffffff14, inset 0 0 16px #00000056, 0 0 0 3px #ff3e9a22, 0 0 18px #ff3e9a30;
+}
+select{
+  appearance:none;
+  -webkit-appearance:none;
+  cursor:pointer;
+  padding-right:32px;
+  background-image:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='7'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23c8f24d' stroke-width='1.4' fill='none' stroke-linecap='round'/%3E%3C/svg%3E"),
+    linear-gradient(180deg, #120914, #241020);
+  background-repeat:no-repeat;
+  background-position:right 13px center, 0 0;
+}
+small{
+  color:var(--specimen);
+  font-size:.68rem;
+  letter-spacing:.04em;
+  text-shadow:0 0 10px #2bd1c344;
+}
+.checkbox-group{
+  width:100%;
+  margin-top:16px;
+  padding-top:14px;
+  position:relative;
+  z-index:1;
+  border-top:1px solid #7a3b6345;
+}
+.checkbox-group label{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:10px;
+  cursor:pointer;
+  color:var(--ink-dim);
+  font-family:var(--mono);
+  font-size:.78rem;
+  letter-spacing:.02em;
+  text-transform:none;
+}
+input[type="checkbox"]{
+  width:17px;
+  height:17px;
+  accent-color:var(--charm);
+  filter:drop-shadow(0 0 6px #ff3e9a88);
+}
 
-    .button:hover {
-      background: #606060;
-    }
-    
-    .button:active {
-      transform: scale(0.98);
-    }
+.dynamic-slider-group{
+  width:100%;
+  padding:10px 0 4px;
+  border-top:1px solid #7a3b632c;
+}
+.dynamic-slider-group:first-child{ border-top:0; }
+.slider-row{
+  width:100%;
+  display:grid;
+  grid-template-columns:76px 58px minmax(90px, 1fr) 58px;
+  gap:8px;
+  align-items:center;
+  margin-bottom:10px;
+}
+.slider-row input[type="number"]{
+  width:100%;
+  padding:7px 6px;
+  font-size:.7rem;
+}
+.slider-row .val-input{
+  border-color:#ff3e9aaa;
+  color:#ffe2f0;
+  font-weight:500;
+}
+.slider-row .param-slider{ width:100%; }
+.min-input,
+.max-input{
+  color:var(--ink-faint) !important;
+  background:#140914 !important;
+  border-color:#4f2742 !important;
+}
 
-    .button.primary {
-      background: #3399ff;
-      color: #fff;
-    }
+/* anchor S/L picker */
+.color-preview{
+  width:196px;
+  height:196px;
+  margin:2px auto 18px;
+  display:block;
+  border:1px solid #9f4a738a;
+  border-radius:22px;
+  background:#160916;
+  cursor:crosshair;
+  touch-action:none;
+  box-shadow:
+    inset 0 0 0 1px #ffffff0c,
+    0 0 0 8px #160916,
+    0 0 0 9px #7a3b6355,
+    0 14px 36px #00000065,
+    0 0 26px #2bd1c31f;
+}
+.anchor-caption{
+  margin:-4px 0 10px;
+  color:var(--ink-faint);
+  font-family:var(--pixel);
+  font-size:.58rem;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+}
 
-    .button.primary:hover {
-      background: #2880db;
-    }
-	
-	
-	footer {
-      margin-top: 40px;
-      padding: 20px;
-      text-align: center;
+/* circular hue slider */
+.hue-slider-track{
+  position:relative;
+  width:100%;
+  height:28px;
+  margin-bottom:14px;
+  overflow:hidden;
+  border:1px solid #7a3b6388;
+  border-radius:999px;
+  cursor:ew-resize;
+  user-select:none;
+  touch-action:none;
+  box-shadow:inset 0 1px 8px #000000b0, 0 0 18px #ff3e9a1e;
+}
+.hue-slider-track::before{
+  content:"";
+  position:absolute;
+  inset:5px;
+  z-index:2;
+  border-radius:999px;
+  border:1px solid #00000055;
+  pointer-events:none;
+}
+.hue-slider-gradient{
+  position:absolute;
+  top:0;
+  left:-100%;
+  width:300%;
+  height:100%;
+  pointer-events:none;
+  will-change:transform;
+  background:linear-gradient(to right,
+    hsl(0,90%,55%),hsl(60,90%,55%),hsl(120,90%,55%),hsl(180,90%,55%),hsl(240,90%,55%),hsl(300,90%,55%),
+    hsl(360,90%,55%),hsl(60,90%,55%),hsl(120,90%,55%),hsl(180,90%,55%),hsl(240,90%,55%),hsl(300,90%,55%),
+    hsl(360,90%,55%),hsl(60,90%,55%),hsl(120,90%,55%),hsl(180,90%,55%),hsl(240,90%,55%),hsl(300,90%,55%),hsl(360,90%,55%));
+}
+.hue-slider-thumb{
+  position:absolute;
+  top:50%;
+  left:50%;
+  width:25px;
+  height:25px;
+  border:3px solid #160916;
+  border-radius:50%;
+  transform:translate(-50%, -50%);
+  box-shadow:0 2px 8px #000000aa, 0 0 0 1px #ffffff33, 0 0 14px #ffffff55;
+  pointer-events:none;
+}
 
-      width: 100%;
-    }
+/* ─── EXPORT ROW ─────────────────────────────────────────────────────── */
+.export-row{
+  width:100%;
+  margin-top:24px;
+  padding:14px;
+  display:flex;
+  flex-wrap:wrap;
+  gap:12px;
+  align-items:center;
+  justify-content:center;
+  border:1px solid #7a3b6355;
+  border-radius:999px;
+  background:linear-gradient(180deg, #2b1228a8, #130812a8);
+  box-shadow:inset 0 1px 0 #ffffff12, 0 16px 38px #00000042;
+}
+#filenameInput{
+  width:auto;
+  max-width:220px;
+  text-align:left;
+}
+.ext{
+  color:var(--ink-faint);
+  font-family:var(--pixel);
+  font-size:.62rem;
+  letter-spacing:.06em;
+}
+#exportStatus{
+  width:100%;
+  min-height:18px;
+  margin-top:7px;
+  text-align:center;
+  color:var(--bio);
+  font-family:var(--pixel);
+  font-size:.6rem;
+  letter-spacing:.06em;
+  text-shadow:0 0 10px #c8f24d66;
+}
 
-    .site-link {
-      font-family: 'Averia Sans Libre', cursive;
-      text-decoration: none;
-      color: #628da8;
-      font-size: 0.9em;
-      transition: all 0.3s ease;
-    }
+/* ─── FOOTER ─────────────────────────────────────────────────────────── */
+footer{
+  width:100%;
+  margin-top:46px;
+  padding:24px;
+  text-align:center;
+}
+.site-link{
+  color:var(--ink-faint);
+  font-family:var(--pixel);
+  font-size:.62rem;
+  letter-spacing:.08em;
+  text-decoration:none;
+  text-transform:uppercase;
+  transition:color .25s, text-shadow .25s;
+}
+.site-link:hover{ color:var(--specimen); text-shadow:0 0 12px #2bd1c377; }
 
-    .site-link:hover {
-      color: #3399ff;
-      text-shadow: 0 0 5px rgba(51, 153, 255, 0.3);
-    }
-  </style>
+/* ─── SMALL SCREENS ──────────────────────────────────────────────────── */
+@media (max-width: 920px){
+  .container{ width:min(100% - 28px, 1240px); }
+  .controls-grid{ grid-template-columns:1fr; }
+  .canvas-wrapper-flex > div{ max-width:100%; }
+  .workspace-zone::after{ opacity:.24; }
+}
+@media (max-width: 620px){
+  .top-bar{ justify-content:center; padding-top:14px; }
+  .masthead{ border-radius:24px; }
+  .title{ font-size:clamp(3.6rem, 21vw, 5.5rem); }
+  #dropPrompt{ min-height:190px; padding:42px 18px; }
+  .slider-row{ grid-template-columns:1fr 48px; }
+  .slider-row .val-input{ grid-column:1 / -1; }
+  .slider-row .param-slider{ grid-column:1 / -1; }
+  .export-row{ border-radius:24px; }
+  #videoControls{ border-radius:22px; flex-wrap:wrap; justify-content:center; }
+  #seekBar{ flex-basis:100%; order:3; }
+  #timeLabel{ min-width:0; }
+}
+
+/* ─── DARK NATIVE DROPDOWN LISTS ───────────────────────────── */
+/* helps browser/OS choose dark popup controls instead of light-on-light */
+select,
+input,
+button {
+  color-scheme: dark;
+}
+
+/* the opened option list, where browsers allow styling */
+select option,
+select optgroup {
+  background: #170a13;
+  color: var(--ink);
+  font-family: var(--mono);
+}
+
+select option {
+  padding: 10px 14px;
+}
+
+select option:checked {
+  background: linear-gradient(90deg, #5c1d43, #183b3a);
+  color: #ffe4f2;
+}
+
+select option:hover,
+select option:focus {
+  background: #2a1726;
+  color: var(--bio);
+}
+
+/* extra insurance for Chromium/Edge dark dropdown rendering */
+select:focus {
+  color-scheme: dark;
+  background-color: var(--ground-2);
+}
+
+/* ─── NUMBER INPUT ARROWS / SPINNERS ───────────────────────── */
+/* keep them visible, but make them feel intentional */
+input[type="number"] {
+  color-scheme: dark;
+  padding-right: 6px;
+}
+
+/* Chrome / Edge / Safari spinner buttons */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  opacity: 1;
+  filter:
+    invert(84%)
+    sepia(18%)
+    saturate(663%)
+    hue-rotate(280deg)
+    brightness(105%);
+  cursor: ns-resize;
+}
+
+/* softer focus state for number inputs */
+input[type="number"]:focus::-webkit-inner-spin-button,
+input[type="number"]:focus::-webkit-outer-spin-button {
+  filter:
+    invert(89%)
+    sepia(54%)
+    saturate(634%)
+    hue-rotate(18deg)
+    brightness(103%);
+}
+
+/* Firefox: make number fields match, though spinner styling is limited */
+input[type="number"] {
+  -moz-appearance: auto;
+  appearance: auto;
+}
+</style>
 </head>
 <body>
 
+<div class="aura" aria-hidden="true"><span class="a"></span><span class="b"></span><span class="c"></span></div>
+
 <div class="top-bar">
-    <a href="about.html" class="nav-link">
-      <img src="gahuema.svg" 
-           style="width: 24px; height: 24px; vertical-align: middle; margin-right: 0px ; margin-top: -4px;">
-      Manual & About
-    </a>
-  </div>
-
-  <div class="container">
-    <div class="title-container">
-      <h1 class="title">GaHueMa</h1>
-      <h2 class="subtitle">Hue Attractor / Repulsor</h2>
-      <button id="uploadBtn" class="button primary">Upload Image</button>
-    </div>
-    
-    <div class="workspace-zone" id="dropZone">
-      <div id="dropPrompt">
-        <div>Drag and drop an image here or click "Upload Image"</div>
-      </div>
-      <input type="file" id="imageInput" accept="image/*" style="display: none;">
-
-      <div id="workspace" style="display: none;">
-        <div class="canvas-wrapper-flex">
-          <div>
-            <h3>Original</h3>
-            <div class="canvas-container">
-              <canvas id="originalCanvas"></canvas>
-              <div id="originalPixelInfo" class="pixel-info">
-                Hover to see pixel info
-              </div>
-            </div>
-          </div>
-          <div>
-            <h3>Modified</h3>
-            <div class="canvas-container">
-              <canvas id="modifiedCanvas"></canvas>
-              <div id="modifiedPixelInfo" class="pixel-info">
-                Hover to see pixel info
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-    
-    <div class="controls">
-      <div class="controls-grid">
-        
-<div class="controls">
-  <div class="controls-grid">
-    
-    <div class="control-panel">
-      <div class="input-group">
-        <label for="transformType">Transform Type:</label>
-        <select id="transformType">
-          <option value="add">Add</option>
-          <option value="multiply">Multiply</option>
-          <option value="binomial">Binomial (M * Δh^P + A)</option>
-        </select>
-      </div>
-      <div class="input-group">
-        <label for="processingBackend">Processing Backend:</label>
-        <select id="processingBackend">
-          <option value="auto">Auto (Prefer GPU)</option>
-          <option value="gpu">GPU (WebGL)</option>
-          <option value="cpu">CPU (JavaScript)</option>
-        </select>
-        <small id="backendStatus" style="margin-top: 6px; color: #8cb4d8;">Backend: Auto</small>
-      </div>
-	  <div class="input-group">
-  <label for="colorSpace">Color Space:</label>
-  <select id="colorSpace">
-    <option value="hsl">Classic HSL</option>
-    <option value="oklch">Perceptual OKLCH</option>
-  </select>
+  <a href="about.html" class="nav-link">
+    <img src="gahuema.svg" alt="">Manual &amp; About
+  </a>
 </div>
-      
-      <div id="basicControls" style="width: 100%;">
-        <div class="dynamic-slider-group" data-param="factor">
-          <label id="factorLabel">Shift Amount (°):</label>
-          <div class="slider-row">
-            <input type="number" id="factor" class="val-input" step="0.1" value="1.5">
-            <input type="number" class="min-input" value="-180" title="Min">
-            <input type="range" class="param-slider" step="0.01">
-            <input type="number" class="max-input" value="180" title="Max">
-          </div>
-        </div>
-      </div>
 
-      <div id="binomialControls" style="display: none; width: 100%;">
-        <div class="dynamic-slider-group" data-param="advM">
-          <label>Multiplier (M):</label>
-          <div class="slider-row">
-            <input type="number" id="advM" class="val-input" step="0.01" value="1">
-            <input type="number" class="min-input" value="-3" title="Min">
-            <input type="range" class="param-slider" step="0.01">
-            <input type="number" class="max-input" value="3" title="Max">
-          </div>
-        </div>
-        <div class="dynamic-slider-group" data-param="advP">
-          <label>Power (P):</label>
-          <div class="slider-row">
-            <input type="number" id="advP" class="val-input" step="0.01" value="1">
-            <input type="number" class="min-input" value="-2" title="Min">
-            <input type="range" class="param-slider" step="0.01">
-            <input type="number" class="max-input" value="2" title="Max">
-          </div>
-        </div>
-        <div class="dynamic-slider-group" data-param="advA">
-          <label>Offset (A):</label>
-          <div class="slider-row">
-            <input type="number" id="advA" class="val-input" step="0.1" value="0">
-            <input type="number" class="min-input" value="-180" title="Min">
-            <input type="range" class="param-slider" step="0.01">
-            <input type="number" class="max-input" value="180" title="Max">
-          </div>
-        </div>
-      </div>
+<div class="container">
+
+  <div class="masthead">
+    <p class="eyebrow"><b>hue processor</b> · image & video</p>
+    <h1 class="title">GaHueMa</h1>
+    <p class="subtitle">Hue Attractor <span class="dot">/</span> Repulsor</p>
+    <button id="uploadBtn" class="button primary">Upload File</button>
+  </div>
+
+  <div class="workspace-zone" id="dropZone">
+    <div id="dropPrompt">
+      <div class="big">drop a file here</div>
+      <div class="small">image or <b>video</b> · or tap to browse</div>
     </div>
+    <input type="file" id="imageInput" accept="image/*,video/*" style="display:none;">
+    <video id="sourceVideo" playsinline muted crossorigin="anonymous" style="display:none;"></video>
 
-    <div class="control-panel">
-      <canvas class="color-preview" id="anchorPreview" width="180" height="180"></canvas>
-      <div class="input-group" style="width: 90%;">
-        <label for="anchorHue">Anchor Hue (0-360°):</label>
-        <div id="hueSlider" class="hue-slider-track" role="slider" aria-valuemin="0" aria-valuemax="360" aria-valuenow="180">
-          <div class="hue-slider-gradient" id="hueSliderGradient"></div>
-          <div class="hue-slider-thumb" id="hueSliderThumb"></div>
+    <div id="workspace" style="display:none;">
+      <div class="canvas-wrapper-flex">
+        <div>
+          <p class="specimen-label">original</p>
+          <div class="canvas-container">
+            <canvas id="originalCanvas"></canvas>
+            <div id="originalPixelInfo" class="pixel-info">hover to read pixel</div>
+          </div>
         </div>
-        <input type="number" id="anchorHue" min="0" max="360" value="180" step="1">
+        <div>
+          <p class="specimen-label">processed</p>
+          <div class="canvas-container">
+            <canvas id="modifiedCanvas"></canvas>
+            <div id="modifiedPixelInfo" class="pixel-info">hover to read pixel</div>
+          </div>
+        </div>
       </div>
-      <div class="checkbox-group">
-        <label><input type="checkbox" id="preventCrossing" checked> Prevent Crossing</label>
+
+      <div id="videoControls">
+        <button id="playPauseBtn" class="transport-btn" title="Play / Pause">▶</button>
+        <input type="range" id="seekBar" min="0" max="1000" value="0" step="1">
+        <span id="timeLabel">0:00 / 0:00</span>
+        <button id="loopBtn" class="transport-btn active" title="Loop">↻</button>
       </div>
     </div>
   </div>
-  </div>
 
+  <div class="controls">
+    <div class="controls-grid">
 
+      <div class="control-panel">
+        <div class="panel-head"><b>01</b> · chroma parameters</div>
 
+        <div class="input-group">
+          <label for="transformType">Transform Type</label>
+          <select id="transformType">
+            <option value="add">Add</option>
+            <option value="multiply">Multiply</option>
+            <option value="binomial">Binomial (M · Δh^P + A)</option>
+          </select>
+        </div>
+
+        <div class="input-group">
+          <label for="processingBackend">Processing Backend</label>
+          <select id="processingBackend">
+            <option value="auto">Auto (Prefer GPU)</option>
+            <option value="gpu">GPU (WebGL)</option>
+            <option value="cpu">CPU (JavaScript)</option>
+          </select>
+          <small id="backendStatus" style="margin-top:6px;">Backend: Auto</small>
+        </div>
+
+        <div class="input-group">
+          <label for="colorSpace">Color Space</label>
+          <select id="colorSpace">
+            <option value="hsl">Classic HSL</option>
+            <option value="oklch">Perceptual OKLCH</option>
+          </select>
+        </div>
+
+        <div id="basicControls" style="width:100%;">
+          <div class="dynamic-slider-group" data-param="factor">
+            <label id="factorLabel">Shift Amount (°)</label>
+            <div class="slider-row">
+              <input type="number" id="factor" class="val-input" step="0.1" value="1.5">
+              <input type="number" class="min-input" value="-180" title="Min">
+              <input type="range" class="param-slider" step="0.01">
+              <input type="number" class="max-input" value="180" title="Max">
+            </div>
+          </div>
+        </div>
+
+        <div id="binomialControls" style="display:none; width:100%;">
+          <div class="dynamic-slider-group" data-param="advM">
+            <label>Multiplier (M)</label>
+            <div class="slider-row">
+              <input type="number" id="advM" class="val-input" step="0.01" value="1">
+              <input type="number" class="min-input" value="-3" title="Min">
+              <input type="range" class="param-slider" step="0.01">
+              <input type="number" class="max-input" value="3" title="Max">
+            </div>
+          </div>
+          <div class="dynamic-slider-group" data-param="advP">
+            <label>Power (P)</label>
+            <div class="slider-row">
+              <input type="number" id="advP" class="val-input" step="0.01" value="1">
+              <input type="number" class="min-input" value="-2" title="Min">
+              <input type="range" class="param-slider" step="0.01">
+              <input type="number" class="max-input" value="2" title="Max">
+            </div>
+          </div>
+          <div class="dynamic-slider-group" data-param="advA">
+            <label>Offset (A)</label>
+            <div class="slider-row">
+              <input type="number" id="advA" class="val-input" step="0.1" value="0">
+              <input type="number" class="min-input" value="-180" title="Min">
+              <input type="range" class="param-slider" step="0.01">
+              <input type="number" class="max-input" value="180" title="Max">
+            </div>
+          </div>
+        </div>
       </div>
 
-<div class="button-group" style="align-items: center;">
-        <input type="text" id="filenameInput" value="gahuema-processed" placeholder="File name" style="width: auto; max-width: 150px; margin-right: 5px; text-align: left;">
-        <span style="color: #bbb; margin-right: 15px; font-weight: 500;">.png</span>
-        <button id="saveBtn" class="button">Save Modified Image</button>
+      <div class="control-panel">
+        <div class="panel-head"><b>02</b> · hue anchor</div>
+        <canvas class="color-preview" id="anchorPreview" width="190" height="190"></canvas>
+        <p class="anchor-caption">saturation / lightness</p>
+        <div class="input-group" style="width:92%;">
+          <label for="anchorHue">Anchor Hue (0–360°)</label>
+          <div id="hueSlider" class="hue-slider-track" role="slider" aria-valuemin="0" aria-valuemax="360" aria-valuenow="180">
+            <div class="hue-slider-gradient" id="hueSliderGradient"></div>
+            <div class="hue-slider-thumb" id="hueSliderThumb"></div>
+          </div>
+          <input type="number" id="anchorHue" min="0" max="360" value="180" step="1">
+        </div>
+        <div class="checkbox-group">
+          <label><input type="checkbox" id="preventCrossing" checked> Prevent crossing the anchor</label>
+        </div>
       </div>
+
     </div>
 
+    <div class="export-row">
+      <input type="text" id="filenameInput" value="gahuema-output" placeholder="File name">
+      <span class="ext" id="extLabel">.png/.webm</span>
+      <button id="saveBtn" class="button primary">Save File</button>
+    </div>
+    <div id="exportStatus"></div>
   </div>
 
+</div>
 
 <footer>
-    <a href="https://xyhtamura.github.io" class="site-link">xyhtamura.github.io</a>
-  </footer>
-  <script src="gahuema.js"></script>
+  <a href="https://xyhtamura.github.io" class="site-link">xyhtamura.github.io</a>
+</footer>
+
+<script src="gahuema.js"></script>
 </body>
 </html>
